@@ -247,9 +247,12 @@ function doLogin() {
   const email = document.getElementById("emailIn").value.trim();
   const pass = document.getElementById("passIn").value.trim();
   if (!email || !pass) return;
-  
+
   S.user = email;
-  localStorage.setItem("savedUser", JSON.stringify({ email: email, password: pass }));
+  localStorage.setItem(
+    "savedUser",
+    JSON.stringify({ email: email, password: pass }),
+  );
   localStorage.setItem("lastScreen", "worldScreen");
   document.getElementById("hudUser").textContent = "👤 " + email.split("@")[0];
   toSc("loginScreen", "worldScreen");
@@ -933,7 +936,7 @@ function toSc(f, t) {
   document.getElementById(f).classList.add("hidden");
   document.getElementById(t).classList.remove("hidden");
   localStorage.setItem("lastScreen", t);
-  
+
   // Hide customer service button on login screen
   const csBtn = document.getElementById("csBtn");
   if (t === "loginScreen") {
@@ -1312,11 +1315,11 @@ window.addEventListener("DOMContentLoaded", () => {
   applyThemeMode(savedTheme);
   _updateUnreadDots();
   setTimeout(fetchWeather, 1200);
-  
+
   // Hide customer service button initially on login screen
   const csBtn = document.getElementById("csBtn");
   csBtn.style.display = "none";
-  
+
   // a) Restaurer l'utilisateur
   const savedUser = localStorage.getItem("savedUser");
   if (savedUser) {
@@ -1325,7 +1328,9 @@ window.addEventListener("DOMContentLoaded", () => {
       S.user = u.email || u.name;
       S.role = u.role;
       const hudUser = document.getElementById("hudUser");
-      if (hudUser) hudUser.textContent = "👤 " + (u.email ? u.email.split("@")[0] : u.name);
+      if (hudUser)
+        hudUser.textContent =
+          "👤 " + (u.email ? u.email.split("@")[0] : u.name);
     } catch (e) {
       // données corrompues → on repart de zéro
       localStorage.removeItem("savedUser");
@@ -1339,7 +1344,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // b) Masquer le login et afficher l'écran sauvegardé
   document.getElementById("loginScreen").classList.add("hidden");
-  
+
   // Show customer service button when leaving login screen
   csBtn.style.display = "flex";
 
