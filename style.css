@@ -205,6 +205,17 @@ body {
   box-shadow: 0 14px 42px rgba(40, 154, 70, 0.6);
 }
 
+/* Hide customer service and zoom on login screen */
+#loginScreen ~ #csBtn {
+  display: none;
+}
+#loginScreen:not(.hidden) ~ #csBtn,
+#loginScreen:not(.hidden) ~ .zoom-controls {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* ════ WORLD ════ */
 #worldScreen {
   background: #0a1a0a;

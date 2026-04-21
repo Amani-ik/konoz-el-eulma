@@ -237,40 +237,27 @@ const S = {
     c.appendChild(p);
   }
 })();
-function selRole(el) {
-  document
-    .querySelectorAll(".rbtn")
-    .forEach((b) => b.classList.remove("active"));
-  el.classList.add("active");
-  S.role = el.dataset.role;
-  document.getElementById("s1btn").style.opacity = "1";
+function chkLogin() {
+  const email = document.getElementById("emailIn").value.trim();
+  const pass = document.getElementById("passIn").value.trim();
+  document.getElementById("lBtn").style.opacity = email && pass ? "1" : ".4";
 }
-function goS2() {
-  if (!S.role) return;
-  document.getElementById("ls1").style.display = "none";
-  document.getElementById("ls2").style.display = "block";
-  setTimeout(() => document.getElementById("nIn").focus(), 80);
-}
-function goS1() {
-  document.getElementById("ls1").style.display = "block";
-  document.getElementById("ls2").style.display = "none";
-}
-function chkN() {
-  document.getElementById("lBtn").style.opacity = document
-    .getElementById("nIn")
-    .value.trim()
-    ? "1"
-    : ".4";
-}
+
 function doLogin() {
-  const n = document.getElementById("nIn").value.trim();
-  if (!n) return;
-  S.user = n;
-  localStorage.setItem("savedUser", JSON.stringify({ name: n, role: S.role }));
+  const email = document.getElementById("emailIn").value.trim();
+  const pass = document.getElementById("passIn").value.trim();
+  if (!email || !pass) return;
+  
+  S.user = email;
+  localStorage.setItem("savedUser", JSON.stringify({ email: email, password: pass }));
   localStorage.setItem("lastScreen", "worldScreen");
-  document.getElementById("hudUser").textContent = "👤 " + n;
+  document.getElementById("hudUser").textContent = "👤 " + email.split("@")[0];
   toSc("loginScreen", "worldScreen");
   setTimeout(buildWorld, 400);
+}
+
+function toggleRegister() {
+  alert("سيتم فتح صفحة التسجيل قريباً"); // You can replace this with actual registration logic
 }
 
 function doLogout() {
@@ -946,6 +933,14 @@ function toSc(f, t) {
   document.getElementById(f).classList.add("hidden");
   document.getElementById(t).classList.remove("hidden");
   localStorage.setItem("lastScreen", t);
+  
+  // Hide customer service button on login screen
+  const csBtn = document.getElementById("csBtn");
+  if (t === "loginScreen") {
+    csBtn.style.display = "none";
+  } else {
+    csBtn.style.display = "flex";
+  }
 }
 function flash() {
   const z = document.getElementById("zfx");
@@ -1317,15 +1312,20 @@ window.addEventListener("DOMContentLoaded", () => {
   applyThemeMode(savedTheme);
   _updateUnreadDots();
   setTimeout(fetchWeather, 1200);
+  
+  // Hide customer service button initially on login screen
+  const csBtn = document.getElementById("csBtn");
+  csBtn.style.display = "none";
+  
   // a) Restaurer l'utilisateur
   const savedUser = localStorage.getItem("savedUser");
   if (savedUser) {
     try {
       const u = JSON.parse(savedUser);
-      S.user = u.name;
+      S.user = u.email || u.name;
       S.role = u.role;
       const hudUser = document.getElementById("hudUser");
-      if (hudUser) hudUser.textContent = "👤 " + u.name;
+      if (hudUser) hudUser.textContent = "👤 " + (u.email ? u.email.split("@")[0] : u.name);
     } catch (e) {
       // données corrompues → on repart de zéro
       localStorage.removeItem("savedUser");
@@ -1339,6 +1339,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // b) Masquer le login et afficher l'écran sauvegardé
   document.getElementById("loginScreen").classList.add("hidden");
+  
+  // Show customer service button when leaving login screen
+  csBtn.style.display = "flex";
 
   if (lastScreen === "worldScreen") {
     document.getElementById("worldScreen").classList.remove("hidden");

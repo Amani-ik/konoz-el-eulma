@@ -31,44 +31,26 @@
             style="
               color: rgba(255, 255, 255, 0.55);
               font-size: 13px;
-              margin-bottom: 13px;
+              margin-bottom: 20px;
               font-weight: 700;
             "
           >
-            اختر دورك
-          </div>
-          <div class="rrow">
-            <div class="rbtn" data-role="client" onclick="selRole(this)">
-              <span class="ri">🛍️</span>
-              <div class="rl">عميل</div>
-              <div class="rd">استكشف واكتشف</div>
-            </div>
-            <div class="rbtn" data-role="vendor" onclick="selRole(this)">
-              <span class="ri">🏪</span>
-              <div class="rl">مورد</div>
-              <div class="rd">ادارة المتجر</div>
-            </div>
-          </div>
-          <button class="ebtn" onclick="goS2()" id="s1btn" style="opacity: 0.4">
-            المتابعة →
-          </button>
-        </div>
-        <div id="ls2" style="display: none">
-          <div
-            style="
-              color: rgba(255, 255, 255, 0.55);
-              font-size: 13px;
-              margin-bottom: 13px;
-              font-weight: 700;
-            "
-          >
-            ما اسمك؟
+            تسجيل الدخول
           </div>
           <input
             class="linput"
-            id="nIn"
-            placeholder="اسمك…"
-            oninput="chkN()"
+            id="emailIn"
+            type="email"
+            placeholder="البريد الإلكتروني…"
+            oninput="chkLogin()"
+            onkeydown="if (event.key === 'Enter') doLogin();"
+          />
+          <input
+            class="linput"
+            id="passIn"
+            type="password"
+            placeholder="كلمة المرور…"
+            oninput="chkLogin()"
             onkeydown="if (event.key === 'Enter') doLogin();"
           />
           <button
@@ -77,22 +59,27 @@
             id="lBtn"
             style="opacity: 0.4"
           >
-            🌍 ابدأ رحلتك
+            دخول الآن
           </button>
-          <div style="margin-top: 11px">
-            <button
-              onclick="goS1()"
+          <div style="margin-top: 16px">
+            <a
+              href="#"
+              onclick="event.preventDefault(); toggleRegister();"
               style="
                 background: none;
                 border: none;
-                color: rgba(255, 255, 255, 0.3);
+                color: rgba(255, 255, 255, 0.5);
                 cursor: pointer;
                 font-size: 13px;
                 font-family: &quot;Nunito&quot;, sans-serif;
+                text-decoration: none;
+                transition: color 0.2s;
               "
+              onmouseover="this.style.color='rgba(255, 255, 255, 0.8)'"
+              onmouseout="this.style.color='rgba(255, 255, 255, 0.5)'"
             >
-              ← العودة
-            </button>
+              ليس لديك حساب؟ <span style="color: #50e080; font-weight: 700;">سجل الآن</span>
+            </a>
           </div>
         </div>
       </div>
