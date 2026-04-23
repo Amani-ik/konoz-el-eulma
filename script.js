@@ -1,3 +1,225 @@
+import { auth } from "./firebase-config.js";
+import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+// ════════════════════════════════════════════════════════════════
+// ═══ نظام تسجيل الدخول - كنوز العلمة ═══
+// ════════════════════════════════════════════════════════════════
+
+// عناصر الواجهة
+let emailInput;
+let passwordInput;
+let loginBtn;
+
+// تهيئة عناصر النموذج عند تحميل الصفحة
+document.addEventListener("DOMContentLoaded", () => {
+  emailInput = document.getElementById("emailIn");
+  passwordInput = document.getElementById("passIn");
+  loginBtn = document.getElementById("lBtn");
+
+  if (emailInput && passwordInput && loginBtn) {
+    // تعطيل الزر في البداية
+    loginBtn.disabled = true;
+    loginBtn.style.opacity = "0.4";
+
+    // إضافة مستمعين للتحقق المباشر من البيانات
+    emailInput.addEventListener("input", validateLoginForm);
+    passwordInput.addEventListener("input", validateLoginForm);
+
+    console.log("✓ تم تهيئة نموذج تسجيل الدخول بنجاح");
+  } else {
+    console.error("✗ فشل في العثور على عناصر نموذج تسجيل الدخول");
+  }
+});
+
+// التحقق من الحقول لتفعيل أو تعطيل الزر
+function validateLoginForm() {
+  if (!emailInput || !passwordInput || !loginBtn) return;
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+
+  // تفعيل الزر فقط إذا كانت الحقول ممتلئة
+  const isValid = email.length > 0 && password.length > 0;
+  loginBtn.disabled = !isValid;
+  loginBtn.style.opacity = isValid ? "1" : "0.4";
+}
+
+// الدالة الرئيسية لتسجيل الدخول
+async function handleLogin() {
+  if (!emailInput || !passwordInput || !loginBtn) {
+    alert("عذراً، حدث خطأ فني في عناصر الصفحة.");
+    return;
+  }
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value.trim();
+
+  // التحقق من المدخلات
+  if (!email || !password) {
+    alert("يرجى إدخال البريد الإلكتروني وكلمة المرور للمتابعة.");
+    return;
+  }
+
+  if (!email.includes("@")) {
+    alert("يرجى إدخال بريد إلكتروني بصيغة صحيحة.");
+    return;
+  }
+
+  // تغيير حالة الزر إلى "جاري التحميل"
+  loginBtn.disabled = true;
+  loginBtn.style.opacity = "0.6";
+  const originalText = loginBtn.textContent;
+  loginBtn.textContent = "جاري التحقق...";
+
+  try {
+    // تسجيل الدخول عبر Firebase
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+    const user = userCredential.user;
+
+    console.log("✓ تم دخول المستخدم:", user.email);
+
+    // حفظ بيانات المستخدم محلياً
+    localStorage.setItem(
+      "savedUser",
+      JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || "مستكشف",
+      }),
+    );
+
+    // حفظ آخر شاشة تم زيارتها
+    localStorage.setItem("lastScreen", "worldScreen");
+
+    // تنبيه النجاح
+    alert("تم تسجيل الدخول بنجاح! مرحباً بك في كنوز العلمة.");
+
+    // التحويل بين الشاشات
+    const loginScreen = document.getElementById("loginScreen");
+    const worldScreen = document.getElementById("worldScreen");
+
+    if (loginScreen) loginScreen.classList.add("hidden");
+    if (worldScreen) worldScreen.classList.remove("hidden");
+
+    // تحديث اسم المستخدم في القائمة إذا وجد
+    const userMenuName = document.getElementById("userMenuName");
+    if (userMenuName) {
+      userMenuName.textContent = user.displayName || user.email;
+    }
+
+    // تفريغ الحقول بعد النجاح
+    emailInput.value = "";
+    passwordInput.value = "";
+    validateLoginForm();
+
+    // تحديث وتهيئة جميع عناصر الواجهة
+    setTimeout(() => {
+      refreshAppUI();
+    }, 500);
+  } catch (error) {
+    console.error("Login error:", error.code, error.message);
+
+    let errorMessage = "حدث خطأ غير متوقع أثناء تسجيل الدخول.";
+
+    // معالجة أخطاء Firebase بالفصحى
+    switch (error.code) {
+      case "auth/invalid-email":
+        errorMessage = "صيغة البريد الإلكتروني المدخل غير صحيحة.";
+        break;
+      case "auth/user-not-found":
+        errorMessage = "عذراً، لا يوجد حساب مرتبط بهذا البريد الإلكتروني.";
+        break;
+      case "auth/wrong-password":
+        errorMessage = "كلمة المرور التي أدخلتها غير صحيحة.";
+        break;
+      case "auth/too-many-requests":
+        errorMessage =
+          "تم حظر الدخول مؤقتاً لتكرار المحاولات الخاطئة، يرجى المحاولة لاحقاً.";
+        break;
+      case "auth/invalid-credential":
+        errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+        break;
+      case "auth/network-request-failed":
+        errorMessage = "فشل الاتصال، يرجى التحقق من جودة الإنترنت لديك.";
+        break;
+      default:
+        errorMessage = "تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.";
+    }
+
+    alert(errorMessage);
+
+    // إعادة الزر لحالته الطبيعية
+    loginBtn.disabled = false;
+    loginBtn.style.opacity = "1";
+    loginBtn.textContent = originalText;
+  }
+}
+
+// جعل الدوال متاحة عالمياً للارتباط بالـ HTML
+window.handleLogin = handleLogin;
+window.validateLoginForm = validateLoginForm;
+
+// ════════════════════════════════════════════════════════════════
+// ═══ تحديث وتهيئة جميع عناصر التطبيق ═══
+// ════════════════════════════════════════════════════════════════
+function refreshAppUI() {
+  console.log("🔄 جاري تحديث واجهة المستخدم...");
+
+  try {
+    // 1. تهيئة شاشة العالم
+    if (!document.getElementById("worldScreen").classList.contains("hidden")) {
+      buildWorld();
+      centerWorld();
+      setTimeout(() => animZoomTo(47, 40), 500);
+    }
+
+    // 2. إظهار زر خدمة العملاء
+    const csBtn = document.getElementById("csBtn");
+    if (csBtn) {
+      csBtn.style.display = "flex";
+    }
+
+    // 3. إعادة تعيين الأحوال
+    closeMiniCard();
+    closeProfile();
+
+    // 4. إغلاق جميع اللوحات المفتوحة
+    const searchPanel = document.getElementById("searchPanel");
+    const newsPanel = document.getElementById("newsPanel");
+    const userMenuPanel = document.getElementById("userMenuPanel");
+    const userMenuBackdrop = document.getElementById("userMenuBackdrop");
+
+    if (searchPanel) searchPanel.classList.remove("open");
+    if (newsPanel) newsPanel.classList.remove("open");
+    if (userMenuPanel) {
+      userMenuPanel.classList.remove("open");
+      userMenuPanel.setAttribute("aria-hidden", "true");
+    }
+    if (userMenuBackdrop) userMenuBackdrop.classList.remove("open");
+
+    // 5. تحديث الطقس والأخبار
+    _updateUnreadDots();
+    fetchWeather();
+
+    // 6. تطبيق إعدادات المظهر المحفوظة
+    const savedTheme = localStorage.getItem("themeMode") || "dark";
+    applyThemeMode(savedTheme);
+
+    console.log("✅ تم تحديث واجهة المستخدم بنجاح");
+  } catch (error) {
+    console.error("❌ خطأ في تحديث الواجهة:", error);
+  }
+}
+
+// Expose refresh function globally
+window.refreshAppUI = refreshAppUI;
+
+// ════════════════════════════════════════════════════════════════
+
 /* ══ DISTRICT IMAGE DATA ══ */
 const DIST_PHOTOS = {
   kitchen:
@@ -2133,4 +2355,70 @@ function goToNewsMarket(newsId) {
     });
     obs.observe(mc, { attributes: true, attributeFilter: ["class"] });
   });
+})();
+
+// ════════════════════════════════════════════════════════════════
+// ═══ تعريض جميع الدوال المطلوبة على المستوى العام ═══
+// ════════════════════════════════════════════════════════════════
+(function () {
+  // Navigation & Screen Management
+  window.toSc = toSc;
+  window.goWorldBack = goWorldBack;
+  window.enterDistrict = enterDistrict;
+  window.openProfile = openProfile;
+  window.closeProfile = closeProfile;
+
+  // World Map
+  window.centerWorld = centerWorld;
+  window.animZoomTo = animZoomTo;
+  window.buildWorld = buildWorld;
+  window.wZoomBtn = wZoomBtn;
+
+  // District Map
+  window.setupDistrict = setupDistrict;
+  window.dZoomBtn = dZoomBtn;
+  window.selectPin = selectPin;
+  window.openMiniCard = openMiniCard;
+  window.closeMiniCard = closeMiniCard;
+  window.openComingSoon = openComingSoon;
+  window.closeComingSoon = closeComingSoon;
+
+  // Search
+  window.toggleSearch = toggleSearch;
+  window.handleSearchInput = handleSearchInput;
+  window.executeSearch = executeSearch;
+
+  // News & Notifications
+  window.toggleNews = toggleNews;
+  window.switchNewsTab = switchNewsTab;
+  window.goToNewsMarket = goToNewsMarket;
+
+  // User Menu
+  window.toggleUserMenu = toggleUserMenu;
+  window.onUserMenuAction = onUserMenuAction;
+
+  // Theme
+  window.toggleTheme = toggleTheme;
+  window.applyThemeMode = applyThemeMode;
+
+  // Lightbox Gallery
+  window.openLB = openLB;
+  window.closeLB = closeLB;
+  window.changeLB = changeLB;
+  window.updateLB = updateLB;
+
+  // Profile Management
+  window.updateProfileSocials = updateProfileSocials;
+  window.updateProfileGallery = updateProfileGallery;
+  window.updateProfileMap = updateProfileMap;
+  window.handleBrokenImage = handleBrokenImage;
+
+  // Weather
+  window.fetchWeather = fetchWeather;
+
+  // Registration/Login
+  window.toggleRegister = toggleRegister;
+  window.doLogout = doLogout;
+
+  console.log("✓ تم تعريض جميع الدوال على المستوى العام بنجاح");
 })();
