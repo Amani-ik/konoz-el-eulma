@@ -126,26 +126,22 @@ async function handleLogin() {
       }),
     );
 
-    // حفظ آخر شاشة تم زيارتها
+    // إعادة تعيين حالة الشاشات - حذف أي ذاكرة district/profile قديمة
+    localStorage.removeItem("lastDistIdx");
+    localStorage.removeItem("lastMarketId");
+    localStorage.removeItem("lastMiniCardOpen");
+
+    // حفظ آخر شاشة تم زيارتها - دائماً worldScreen بعد تسجيل الدخول
     localStorage.setItem("lastScreen", "worldScreen");
 
     // تنبيه النجاح
     alert("تم تسجيل الدخول بنجاح! مرحباً بك في كنوز العلمة.");
 
-    // إعادة تعيين حالة الشاشات - حذف أي ذاكرة district/profile
-    localStorage.removeItem("lastDistIdx");
-    localStorage.removeItem("lastMarketId");
-    localStorage.removeItem("lastMiniCardOpen");
-
-    // التحويل بين الشاشات - إظهار worldScreen فقط
-    ["loginScreen", "districtScreen", "profileScreen", "worldScreen"].forEach(
-      (id) => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.classList.toggle("hidden", id !== "worldScreen");
-        }
-      },
-    );
+    // إخفاء جميع الشاشات أولاً ثم إظهار worldScreen فقط بشكل صريح
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("districtScreen").classList.add("hidden");
+    document.getElementById("profileScreen").classList.add("hidden");
+    document.getElementById("worldScreen").classList.remove("hidden");
 
     // تحديث اسم المستخدم في القائمة إذا وجد
     const userMenuName = document.getElementById("userMenuName");
@@ -169,7 +165,7 @@ async function handleLogin() {
     passwordInput.value = "";
     validateLoginForm();
 
-    // تحديث وتهيئة جميع عناصر الواجهة (يشمل تحديث الاختبارات)
+    // تحديث وتهيئة جميع عناصر الواجهة وبناء المناطق
     setTimeout(() => {
       refreshAppUI();
     }, 500);
@@ -537,15 +533,23 @@ function doLogin() {
     "savedUser",
     JSON.stringify({ email: email, password: pass }),
   );
-  localStorage.setItem("lastScreen", "worldScreen");
 
   // حذف أي ذاكرة district/profile قديمة
   localStorage.removeItem("lastDistIdx");
   localStorage.removeItem("lastMarketId");
   localStorage.removeItem("lastMiniCardOpen");
 
+  // دائماً اذهب إلى worldScreen بعد تسجيل الدخول
+  localStorage.setItem("lastScreen", "worldScreen");
+
   document.getElementById("hudUser").textContent = "👤 " + email.split("@")[0];
-  toSc("loginScreen", "worldScreen");
+
+  // إخفاء جميع الشاشات أولاً ثم إظهار worldScreen فقط
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("districtScreen").classList.add("hidden");
+  document.getElementById("profileScreen").classList.add("hidden");
+  document.getElementById("worldScreen").classList.remove("hidden");
+
   setTimeout(buildWorld, 400);
 }
 
