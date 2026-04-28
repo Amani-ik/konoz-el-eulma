@@ -132,12 +132,20 @@ async function handleLogin() {
     // تنبيه النجاح
     alert("تم تسجيل الدخول بنجاح! مرحباً بك في كنوز العلمة.");
 
-    // التحويل بين الشاشات
-    const loginScreen = document.getElementById("loginScreen");
-    const worldScreen = document.getElementById("worldScreen");
+    // إعادة تعيين حالة الشاشات - حذف أي ذاكرة district/profile
+    localStorage.removeItem("lastDistIdx");
+    localStorage.removeItem("lastMarketId");
+    localStorage.removeItem("lastMiniCardOpen");
 
-    if (loginScreen) loginScreen.classList.add("hidden");
-    if (worldScreen) worldScreen.classList.remove("hidden");
+    // التحويل بين الشاشات - إظهار worldScreen فقط
+    ["loginScreen", "districtScreen", "profileScreen", "worldScreen"].forEach(
+      (id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.toggle("hidden", id !== "worldScreen");
+        }
+      },
+    );
 
     // تحديث اسم المستخدم في القائمة إذا وجد
     const userMenuName = document.getElementById("userMenuName");
@@ -145,12 +153,23 @@ async function handleLogin() {
       userMenuName.textContent = user.displayName || user.email;
     }
 
+    // تحديث اسم المستخدم في الـ HUD (الشريط العلوي)
+    const hudUser = document.getElementById("hudUser");
+    const displayName = user.displayName || user.email.split("@")[0];
+    if (hudUser) {
+      hudUser.textContent = "👤 " + displayName;
+    }
+
+    // تحديث الحالة العامة للتطبيق
+    window.S = window.S || {};
+    window.S.user = displayName;
+
     // تفريغ الحقول بعد النجاح
     emailInput.value = "";
     passwordInput.value = "";
     validateLoginForm();
 
-    // تحديث وتهيئة جميع عناصر الواجهة
+    // تحديث وتهيئة جميع عناصر الواجهة (يشمل تحديث الاختبارات)
     setTimeout(() => {
       refreshAppUI();
     }, 500);
@@ -519,6 +538,12 @@ function doLogin() {
     JSON.stringify({ email: email, password: pass }),
   );
   localStorage.setItem("lastScreen", "worldScreen");
+
+  // حذف أي ذاكرة district/profile قديمة
+  localStorage.removeItem("lastDistIdx");
+  localStorage.removeItem("lastMarketId");
+  localStorage.removeItem("lastMiniCardOpen");
+
   document.getElementById("hudUser").textContent = "👤 " + email.split("@")[0];
   toSc("loginScreen", "worldScreen");
   setTimeout(buildWorld, 400);
@@ -532,6 +557,11 @@ function doLogout() {
   S.user = "";
   localStorage.removeItem("savedUser");
   localStorage.removeItem("lastScreen");
+
+  // حذف أي ذاكرة district/profile
+  localStorage.removeItem("lastDistIdx");
+  localStorage.removeItem("lastMarketId");
+  localStorage.removeItem("lastMiniCardOpen");
 
   const hudUser = document.getElementById("hudUser");
   if (hudUser) {
