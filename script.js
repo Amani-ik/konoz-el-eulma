@@ -206,9 +206,6 @@ function refreshAppUI() {
     fetchWeather();
 
     // 6. تطبيق إعدادات المظهر المحفوظة
-    const savedTheme = localStorage.getItem("themeMode") || "dark";
-    applyThemeMode(savedTheme);
-
     console.log("✅ تم تحديث واجهة المستخدم بنجاح");
   } catch (error) {
     console.error("❌ خطأ في تحديث الواجهة:", error);
