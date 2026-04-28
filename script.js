@@ -126,22 +126,31 @@ async function handleLogin() {
       }),
     );
 
-    // إعادة تعيين حالة الشاشات - حذف أي ذاكرة district/profile قديمة
-    localStorage.removeItem("lastDistIdx");
-    localStorage.removeItem("lastMarketId");
-    localStorage.removeItem("lastMiniCardOpen");
-
-    // حفظ آخر شاشة تم زيارتها - دائماً worldScreen بعد تسجيل الدخول
+    // حفظ آخر شاشة تم زيارتها
     localStorage.setItem("lastScreen", "worldScreen");
 
     // تنبيه النجاح
     alert("تم تسجيل الدخول بنجاح! مرحباً بك في كنوز العلمة.");
 
-    // إخفاء جميع الشاشات أولاً ثم إظهار worldScreen فقط بشكل صريح
-    document.getElementById("loginScreen").classList.add("hidden");
-    document.getElementById("districtScreen").classList.add("hidden");
-    document.getElementById("profileScreen").classList.add("hidden");
-    document.getElementById("worldScreen").classList.remove("hidden");
+    // إعادة تعيين حالة الشاشات - حذف أي ذاكرة district/profile
+    localStorage.removeItem("lastDistIdx");
+    localStorage.removeItem("lastMarketId");
+    localStorage.removeItem("lastMiniCardOpen");
+
+    // Always refresh the page after login (one-time)
+    sessionStorage.setItem("loginReloadOnce", "1");
+    window.location.reload();
+    return;
+
+    // التحويل بين الشاشات - إظهار worldScreen فقط
+    ["loginScreen", "districtScreen", "profileScreen", "worldScreen"].forEach(
+      (id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.toggle("hidden", id !== "worldScreen");
+        }
+      },
+    );
 
     // تحديث اسم المستخدم في القائمة إذا وجد
     const userMenuName = document.getElementById("userMenuName");
@@ -165,7 +174,7 @@ async function handleLogin() {
     passwordInput.value = "";
     validateLoginForm();
 
-    // تحديث وتهيئة جميع عناصر الواجهة وبناء المناطق
+    // تحديث وتهيئة جميع عناصر الواجهة (يشمل تحديث الاختبارات)
     setTimeout(() => {
       refreshAppUI();
     }, 500);
@@ -533,23 +542,20 @@ function doLogin() {
     "savedUser",
     JSON.stringify({ email: email, password: pass }),
   );
+  localStorage.setItem("lastScreen", "worldScreen");
 
   // حذف أي ذاكرة district/profile قديمة
   localStorage.removeItem("lastDistIdx");
   localStorage.removeItem("lastMarketId");
   localStorage.removeItem("lastMiniCardOpen");
 
-  // دائماً اذهب إلى worldScreen بعد تسجيل الدخول
-  localStorage.setItem("lastScreen", "worldScreen");
+  // Always refresh the page after login (one-time)
+  sessionStorage.setItem("loginReloadOnce", "1");
+  window.location.reload();
+  return;
 
   document.getElementById("hudUser").textContent = "👤 " + email.split("@")[0];
-
-  // إخفاء جميع الشاشات أولاً ثم إظهار worldScreen فقط
-  document.getElementById("loginScreen").classList.add("hidden");
-  document.getElementById("districtScreen").classList.add("hidden");
-  document.getElementById("profileScreen").classList.add("hidden");
-  document.getElementById("worldScreen").classList.remove("hidden");
-
+  toSc("loginScreen", "worldScreen");
   setTimeout(buildWorld, 400);
 }
 
@@ -590,8 +596,6 @@ function doLogout() {
       }
     },
   );
-
-  localStorage.setItem("lastScreen", "loginScreen");
 }
 
 /* ══ WORLD MAP ══ */
@@ -1610,6 +1614,11 @@ document.addEventListener("click", (e) => {
 
 /* ══ PERSISTENCE RESTORE ══ */
 window.addEventListener("DOMContentLoaded", () => {
+  // One-time reload after a successful login (prevents stale UI/state)
+  if (sessionStorage.getItem("loginReloadOnce") === "1") {
+    sessionStorage.removeItem("loginReloadOnce");
+  }
+
   const savedTheme = localStorage.getItem("themeMode") || "dark";
   applyThemeMode(savedTheme);
   _updateUnreadDots();
