@@ -26,10 +26,16 @@ function hideSkeleton() {
     skeletonScreen.classList.add("hidden");
 
     // إظهار شاشة تسجيل الدخول بعد اختفاء الهيكل العظمي
-    if (loginScreen) {
+    // IMPORTANT: do not unhide login if we already restored into app
+    const hasSavedUser = !!localStorage.getItem("savedUser");
+    const lastScreen = localStorage.getItem("lastScreen");
+    const shouldShowLogin =
+      !hasSavedUser || !lastScreen || lastScreen === "loginScreen";
+    if (loginScreen && shouldShowLogin) {
       loginScreen.classList.remove("hidden");
     }
   }
+
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1645,16 +1651,29 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  const lastScreen = localStorage.getItem("lastScreen");
+  let lastScreen = localStorage.getItem("lastScreen");
 
-  // Si aucun utilisateur sauvegardé ou écran = loginScreen → rester sur le login
-  if (!savedUser || !lastScreen || lastScreen === "loginScreen") return;
+  // If no saved user → stay on login
+  if (!savedUser) return;
+
+  // If lastScreen is missing or loginScreen → default to worldScreen
+  if (!lastScreen || lastScreen === "loginScreen") {
+    lastScreen = "worldScreen";
+    localStorage.setItem("lastScreen", lastScreen);
+  }
 
   // b) Masquer le login et afficher l'écran sauvegardé
   document.getElementById("loginScreen").classList.add("hidden");
 
   // Show customer service button when leaving login screen
   csBtn.style.display = "flex";
+  csBtn.classList.remove("hidden-by-card");
+
+  // Ensure global controls are visible after a reload/login
+  closeMiniCard();
+  document
+    .querySelectorAll(".zoom-controls")
+    .forEach((c) => c.classList.remove("hidden"));
 
   if (lastScreen === "worldScreen") {
     document.getElementById("worldScreen").classList.remove("hidden");
