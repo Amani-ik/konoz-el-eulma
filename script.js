@@ -2,6 +2,37 @@ import { auth } from "./firebase-config.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // ════════════════════════════════════════════════════════════════
+// ═══ نظام الهيكل العظمي - كنوز العلمة ═══
+// ════════════════════════════════════════════════════════════════
+
+// إظهار الهيكل العظمي وإخفاؤه بعد تحميل التطبيق
+function initializeSkeleton() {
+  const skeletonScreen = document.getElementById("skeletonScreen");
+
+  if (skeletonScreen) {
+    // الهيكل العظمي مرئي بالفعل عند تحميل الصفحة
+    // محاكاة وقت التحميل (2-3 ثواني)
+    setTimeout(() => {
+      hideSkeleton();
+    }, 2500);
+  }
+}
+
+function hideSkeleton() {
+  const skeletonScreen = document.getElementById("skeletonScreen");
+  const loginScreen = document.getElementById("loginScreen");
+
+  if (skeletonScreen) {
+    skeletonScreen.classList.add("hidden");
+
+    // إظهار شاشة تسجيل الدخول بعد اختفاء الهيكل العظمي
+    if (loginScreen) {
+      loginScreen.classList.remove("hidden");
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
 // ═══ نظام تسجيل الدخول - كنوز العلمة ═══
 // ════════════════════════════════════════════════════════════════
 
@@ -12,6 +43,9 @@ let loginBtn;
 
 // تهيئة عناصر النموذج عند تحميل الصفحة
 document.addEventListener("DOMContentLoaded", () => {
+  // تهيئة الهيكل العظمي أولاً
+  initializeSkeleton();
+
   emailInput = document.getElementById("emailIn");
   passwordInput = document.getElementById("passIn");
   loginBtn = document.getElementById("lBtn");

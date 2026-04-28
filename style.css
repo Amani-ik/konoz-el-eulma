@@ -987,6 +987,143 @@ body {
   }
 }
 
+/* ════ SKELETON LOADER ════ */
+#skeletonScreen {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 40% 30%, #0d2d10 0%, #050d08 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity 0.6s ease-out;
+  pointer-events: all;
+}
+#skeletonScreen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.skeleton-card {
+  position: relative;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  padding: 48px 42px;
+  width: min(440px, 92vw);
+  text-align: center;
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: cIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.skeleton-logo {
+  width: 68px;
+  height: 68px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 50%;
+  margin: 0 auto 12px;
+}
+
+.skeleton-title {
+  width: 200px;
+  height: 38px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 12px;
+  margin: 0 auto 12px;
+}
+
+.skeleton-subtitle {
+  width: 250px;
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 8px;
+  margin: 0 auto 30px;
+}
+
+.skeleton-space {
+  height: 20px;
+}
+
+.skeleton-input {
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+
+.skeleton-button {
+  width: 100%;
+  height: 48px;
+  background: linear-gradient(
+    90deg,
+    rgba(80, 200, 120, 0.2) 25%,
+    rgba(80, 200, 120, 0.35) 50%,
+    rgba(80, 200, 120, 0.2) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 14px;
+  margin-top: 15px;
+}
+
+.skeleton-link {
+  width: 120px;
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: 8px;
+  margin: 20px auto 0;
+}
+
+@keyframes skeletonLoading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
