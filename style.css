@@ -687,6 +687,31 @@ body {
   height: 100%;
   object-fit: cover;
   object-position: center 30%;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.prof-hero-img.loaded {
+  opacity: 1;
+}
+
+.prof-hero-img.loading {
+  opacity: 0;
+}
+
+/* Hero Skeleton Placeholder */
+.prof-hero-skeleton {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #2a2a2a 0%, #3a3a3a 50%, #2a2a2a 100%);
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  z-index: 1;
+}
+
+.prof-hero-skeleton.loaded {
+  display: none;
 }
 .prof-hero-overlay {
   position: absolute;
@@ -892,6 +917,31 @@ body {
   object-fit: cover;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: opacity 0.4s ease-in-out;
+}
+
+.gallery-grid img.loaded {
+  opacity: 1;
+}
+
+.gallery-grid img.loading {
+  opacity: 0;
+}
+
+/* Image Skeleton Loader */
+.img-skeleton-loader {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(90deg, #2a2a2a 0%, #3a3a3a 50%, #2a2a2a 100%);
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+}
+
+.img-skeleton-loader.loaded {
+  display: none;
 }
 
 /* Style du conteneur de la carte */

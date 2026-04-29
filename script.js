@@ -1150,8 +1150,40 @@ function openProfile() {
     "lastMarketId",
     JSON.stringify({ distId: d.id, mktIdx: mktIdx }),
   );
-  // Hero image = district photo
-  document.getElementById("profHeroImg").src = DIST_PHOTOS[d.id];
+  // Hero image = district photo with lazy loading
+  const heroImg = document.getElementById("profHeroImg");
+  const heroContainer = document.getElementById("profHeroImg").parentElement;
+
+  // Create or get skeleton
+  let heroSkeleton = heroContainer.querySelector(".prof-hero-skeleton");
+  if (!heroSkeleton) {
+    heroSkeleton = document.createElement("div");
+    heroSkeleton.className = "prof-hero-skeleton";
+    heroContainer.insertBefore(heroSkeleton, heroImg);
+  }
+
+  // Reset skeleton visibility
+  heroSkeleton.classList.remove("loaded");
+
+  // Set image with loading class
+  heroImg.classList.add("loading");
+  heroImg.classList.remove("loaded");
+
+  // Handle image load
+  heroImg.onload = () => {
+    heroImg.classList.remove("loading");
+    heroImg.classList.add("loaded");
+    heroSkeleton.classList.add("loaded");
+  };
+
+  // Handle image error
+  heroImg.onerror = () => {
+    heroSkeleton.innerHTML =
+      '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;">Failed to load</div>';
+  };
+
+  heroImg.src = DIST_PHOTOS[d.id];
+  heroImg.loading = "lazy";
   document.getElementById("profHeroTitle").textContent = m.name;
 
   const tags = m.tags
@@ -1335,10 +1367,44 @@ function updateProfileGallery(market) {
 
   imgs.forEach((imgData, index) => {
     const src = imgData.url || imgData;
+
+    // Create wrapper div for image and skeleton
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.width = "100%";
+    wrapper.style.height = "200px";
+    wrapper.style.borderRadius = "10px";
+    wrapper.style.overflow = "hidden";
+
+    // Create skeleton placeholder
+    const skeleton = document.createElement("div");
+    skeleton.className = "img-skeleton-loader";
+
+    // Create image element with lazy loading
     const imgDiv = document.createElement("img");
+    imgDiv.className = "loading";
     imgDiv.src = src;
+    imgDiv.loading = "lazy";
+    imgDiv.alt = "Market product image";
     imgDiv.onclick = () => openLB(index, imgs);
-    container.appendChild(imgDiv);
+
+    // Handle image load
+    imgDiv.onload = () => {
+      imgDiv.classList.remove("loading");
+      imgDiv.classList.add("loaded");
+      skeleton.classList.add("loaded");
+    };
+
+    // Handle image error
+    imgDiv.onerror = () => {
+      imgDiv.style.display = "none";
+      skeleton.innerHTML =
+        '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#999;">Failed to load</div>';
+    };
+
+    wrapper.appendChild(skeleton);
+    wrapper.appendChild(imgDiv);
+    container.appendChild(wrapper);
   });
 }
 
