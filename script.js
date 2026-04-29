@@ -1,5 +1,10 @@
 import { auth } from "./firebase-config.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { db } from "./firebase-config.js";
+import {
+  collection,
+  getDocs,
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // ════════════════════════════════════════════════════════════════
 // ═══ نظام الهيكل العظمي - كنوز العلمة ═══
@@ -3183,5 +3188,14 @@ function goToNewsMarket(newsId) {
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
 
-  console.log("✓ تم تعريض جميع الدوال على المستوى العام بنجاح");
+  // reviews
+  async function loadReviews() {
+    const querySnapshot = await getDocs(collection(db, "reviews"));
+    querySnapshot.forEach((doc) => {
+      console.log("التعليق من Firestore: ", doc.data().text);
+    });
+  }
+
+  // نعيطو للدالة باش تخدم
+  loadReviews();
 })();
