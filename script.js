@@ -512,6 +512,119 @@ const S = {
   dImgH: 768,
 };
 
+/* ══ PROFILES: RATINGS & REVIEWS (Local) ══ */
+const PROFILES_STORE_KEY = "profiles";
+
+function _safeJsonParse(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function _escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function _getUserKey() {
+  const savedUserRaw = localStorage.getItem("savedUser");
+  const savedUser = _safeJsonParse(savedUserRaw, null);
+  // Prefer Firebase uid if present, else email, else current state user.
+  return (
+    (savedUser && (savedUser.uid || savedUser.email)) || S.user || "anonymous"
+  );
+}
+
+function _getMarketKey(distId, mktIdx) {
+  return `${distId}:${mktIdx}`;
+}
+
+function _loadProfilesStore() {
+  return _safeJsonParse(localStorage.getItem(PROFILES_STORE_KEY), {});
+}
+
+function _saveProfilesStore(store) {
+  localStorage.setItem(PROFILES_STORE_KEY, JSON.stringify(store));
+}
+
+function _ensureUserProfile(store, userKey) {
+  if (!store[userKey]) store[userKey] = {};
+  const p = store[userKey];
+  if (!p.rating) p.rating = {};
+  if (!p.reviews) p.reviews = {};
+  return p;
+}
+
+function _getMarketAggregateFromProfiles(marketKey) {
+  const store = _loadProfilesStore();
+  let sum = 0;
+  let count = 0;
+  for (const userKey in store) {
+    const p = store[userKey];
+    const r = p && p.rating && p.rating[marketKey];
+    if (typeof r === "number" && r >= 1 && r <= 5) {
+      sum += r;
+      count += 1;
+    }
+  }
+  const avg = count ? sum / count : 0;
+  return { avg, count };
+}
+
+function _getUserMarketReview(marketKey) {
+  const userKey = _getUserKey();
+  const store = _loadProfilesStore();
+  const p = store[userKey];
+  const rating = p && p.rating ? p.rating[marketKey] : undefined;
+  const review = p && p.reviews ? p.reviews[marketKey] : undefined;
+  return {
+    rating: typeof rating === "number" ? rating : 0,
+    reviewText: review && typeof review.text === "string" ? review.text : "",
+  };
+}
+
+function _saveUserMarketReview(marketKey, rating, reviewText) {
+  const userKey = _getUserKey();
+  const store = _loadProfilesStore();
+  const p = _ensureUserProfile(store, userKey);
+  p.rating[marketKey] = rating;
+  p.reviews[marketKey] = {
+    text: reviewText,
+    rating,
+    updatedAt: Date.now(),
+  };
+  _saveProfilesStore(store);
+}
+
+function _getAllMarketReviews(marketKey) {
+  const store = _loadProfilesStore();
+  const out = [];
+  for (const userKey in store) {
+    const p = store[userKey];
+    const rv = p && p.reviews ? p.reviews[marketKey] : null;
+    if (!rv || typeof rv !== "object") continue;
+    const rating = Number(rv.rating || 0);
+    const text = typeof rv.text === "string" ? rv.text.trim() : "";
+    if (!(rating >= 1 && rating <= 5)) continue;
+    if (!text) continue; // only show comments with text
+    out.push({
+      userKey,
+      rating,
+      text,
+      updatedAt: Number(rv.updatedAt || 0),
+    });
+  }
+  out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return out;
+}
+
 /* ══ LOGIN ══ */
 (() => {
   const c = document.getElementById("lpWrap");
@@ -1146,6 +1259,13 @@ function openProfile() {
   // Save market identifier for restoration
   const distMarkets = MARKETS[d.id] || [];
   const mktIdx = distMarkets.indexOf(m);
+  const marketKey = _getMarketKey(d.id, mktIdx);
+  const agg = _getMarketAggregateFromProfiles(marketKey);
+  const aggAvgText = agg.count ? agg.avg.toFixed(1) : "—";
+  const aggCountText = String(agg.count || 0);
+  // Keep market object in sync (profile uses these fields)
+  m.rating = aggAvgText;
+  m.reviews = aggCountText;
   localStorage.setItem(
     "lastMarketId",
     JSON.stringify({ distId: d.id, mktIdx: mktIdx }),
@@ -1200,7 +1320,12 @@ function openProfile() {
               <div class="owner-nm">${m.owner}</div>
               <div class="owner-sb">${m.sub}</div>
               <div style="margin-bottom:16px">${tags}</div>
-              <div style="display:flex;align-items:center;gap:6px;color:#111;font-weight:800;font-size:16px;">⭐ ${m.rating} <span style="color:#999;font-weight:600;font-size:14px;">(${m.reviews} avis)</span></div>
+              <div class="prof-agg-rating">
+                <div style="display:flex;align-items:center;gap:6px;color:#111;font-weight:800;font-size:16px;">
+                  ⭐ <span id="profAggRating">${m.rating}</span>
+                  <span style="color:#999;font-weight:600;font-size:14px;">(<span id="profAggCount">${m.reviews}</span> avis)</span>
+                </div>
+              </div>
             </div>
            <button class="cta-call" style="background:${d.accent || "#e67e22"}; flex:1;" onclick="window.open('tel:${m.phone}')">
             📞 اتصال
@@ -1233,6 +1358,32 @@ function openProfile() {
             <div class="section-title"><span class="section-diamond">◆</span> الموقع</div>
             <div id="profMap"></div>
           </div>
+
+          <div class="prof-card">
+            <div class="section-title"><span class="section-diamond">◆</span> تعليقات الزبائن</div>
+            <div class="reviews-list" id="profReviewsList"></div>
+          </div>
+
+          <div class="prof-card">
+            <div class="section-title"><span class="section-diamond">◆</span> قيّم المتجر</div>
+            <div class="rate-box" style="--rateAccent:${d.accent || "#e67e22"}">
+              <button type="button" class="rate-action" id="rateActionBtn">قيّم الآن</button>
+              <div class="rate-panel" id="ratePanel">
+                <div class="rate-stars" id="rateStars" role="radiogroup" aria-label="Rating">
+                  ${[1, 2, 3, 4, 5]
+                    .map(
+                      (v) =>
+                        `<button type="button" class="rate-star" data-value="${v}" aria-label="${v} stars">★</button>`,
+                    )
+                    .join("")}
+                </div>
+                <div class="rate-hint" id="rateHint">اختر تقييمك (من 1 إلى 5)</div>
+                <textarea id="rateText" class="rate-text" rows="3" placeholder="اكتب رأيك (اختياري)"></textarea>
+                <button type="button" class="rate-submit" id="rateSubmitBtn" hidden>إرسال التقييم</button>
+                <div class="rate-msg" id="rateMsg" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
         `;
   document.getElementById("profScroll").scrollTop = 0;
   toSc("districtScreen", "profileScreen");
@@ -1240,6 +1391,400 @@ function openProfile() {
   updateProfileSocials(m);
   updateProfileGallery(m);
   updateProfileMap(m);
+
+  // Render other users' comments
+  (function renderReviewsList() {
+    const list = document.getElementById("profReviewsList");
+    if (!list) return;
+    const me = _getUserKey();
+    const all = _getAllMarketReviews(marketKey);
+    if (!all.length) {
+      list.innerHTML = `<div class="review-empty">لا توجد تعليقات بعد. كن أول من يكتب تعليقاً.</div>`;
+      return;
+    }
+    const max = 12;
+    list.innerHTML = all
+      .slice(0, max)
+      .map((r) => {
+        const stars =
+          "★".repeat(r.rating) + "☆".repeat(Math.max(0, 5 - r.rating));
+        const date = r.updatedAt
+          ? new Date(r.updatedAt).toLocaleDateString()
+          : "";
+        const isMe = r.userKey === me;
+        return `
+          <div class="review-item">
+            <div class="review-top">
+              <div class="review-stars">${stars} ${
+                isMe ? `<span class="review-me">أنت</span>` : ""
+              }</div>
+              <div class="review-date">${_escapeHtml(date)}</div>
+            </div>
+            <div class="review-text">${_escapeHtml(r.text)}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    // #region agent log
+    fetch("http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "df48cc",
+      },
+      body: JSON.stringify({
+        sessionId: "df48cc",
+        runId: "pre-fix",
+        hypothesisId: "H4",
+        location: "script.js:renderReviewsList",
+        message: "Rendered reviews list",
+        data: {
+          marketKey,
+          count: all.length,
+          shown: Math.min(max, all.length),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  })();
+
+  // Initialize rating UI (after DOM injected)
+  (function initRatingUI() {
+    const actionBtn = document.getElementById("rateActionBtn");
+    const panel = document.getElementById("ratePanel");
+    const starsWrap = document.getElementById("rateStars");
+    const hint = document.getElementById("rateHint");
+    const textEl = document.getElementById("rateText");
+    const legacySubmitBtn = document.getElementById("rateSubmitBtn");
+    const msg = document.getElementById("rateMsg");
+    if (
+      !actionBtn ||
+      !panel ||
+      !starsWrap ||
+      !hint ||
+      !textEl ||
+      !legacySubmitBtn ||
+      !msg
+    )
+      return;
+
+    const existing = _getUserMarketReview(marketKey);
+    let selected = existing.rating || 0;
+    textEl.value = existing.reviewText || "";
+
+    // Hide legacy submit button (we now use a single stateful action button)
+    legacySubmitBtn.hidden = true;
+
+    let isEditing = false;
+    const hasExisting =
+      existing.rating >= 1 && (existing.reviewText || "").trim();
+    // Start closed/disabled always; only enable when user chooses to edit
+    panel.hidden = true;
+
+    function computeCanSend() {
+      const hasStars = selected >= 1 && selected <= 5;
+      const hasText = (textEl.value || "").trim().length > 0;
+      return hasStars && hasText;
+    }
+
+    function setControlsEnabled(enabled) {
+      const stars = starsWrap.querySelectorAll(".rate-star");
+      stars.forEach((s) => (s.disabled = !enabled));
+      textEl.disabled = !enabled;
+      panel.classList.toggle("is-disabled", !enabled);
+    }
+
+    function syncActionButton() {
+      const canSend = computeCanSend();
+      if (!isEditing) {
+        actionBtn.textContent = hasExisting ? "تعديل تقييمك" : "قيّم الآن";
+        actionBtn.disabled = false;
+        return;
+      }
+      if (canSend) {
+        actionBtn.textContent = "إرسال تقييمك";
+        actionBtn.disabled = false;
+      } else {
+        actionBtn.textContent = "قيّم الآن";
+        actionBtn.disabled = true;
+      }
+    }
+
+    function paint() {
+      const stars = starsWrap.querySelectorAll(".rate-star");
+      stars.forEach((s) => {
+        const v = Number(s.dataset.value || 0);
+        s.classList.toggle("on", v <= selected);
+      });
+      hint.textContent = selected
+        ? `تقييمك الحالي: ${selected}/5`
+        : "اختر تقييمك (من 1 إلى 5)";
+      syncActionButton();
+    }
+
+    starsWrap.addEventListener("click", (e) => {
+      if (!isEditing) return;
+      const b = e.target.closest(".rate-star");
+      if (!b) return;
+      selected = Number(b.dataset.value || 0);
+      msg.textContent = "";
+      paint();
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "df48cc",
+          },
+          body: JSON.stringify({
+            sessionId: "df48cc",
+            runId: "pre-fix",
+            hypothesisId: "H1",
+            location: "script.js:starsWrap.click",
+            message: "Star selected",
+            data: {
+              marketKey,
+              selected,
+              isEditing,
+              actionLabel: actionBtn.textContent,
+              disabled: !!actionBtn.disabled,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
+      // #endregion
+    });
+
+    textEl.addEventListener("input", () => {
+      if (!isEditing) return;
+      msg.textContent = "";
+      syncActionButton();
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "df48cc",
+          },
+          body: JSON.stringify({
+            sessionId: "df48cc",
+            runId: "pre-fix",
+            hypothesisId: "H2",
+            location: "script.js:rateText.input",
+            message: "Comment input changed",
+            data: {
+              marketKey,
+              len: (textEl.value || "").length,
+              trimLen: (textEl.value || "").trim().length,
+              isEditing,
+              actionLabel: actionBtn.textContent,
+              disabled: !!actionBtn.disabled,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
+      // #endregion
+    });
+
+    actionBtn.addEventListener("click", () => {
+      msg.textContent = "";
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "df48cc",
+          },
+          body: JSON.stringify({
+            sessionId: "df48cc",
+            runId: "pre-fix",
+            hypothesisId: "H3",
+            location: "script.js:rateActionBtn.click",
+            message: "Action button clicked",
+            data: {
+              marketKey,
+              isEditing,
+              label: actionBtn.textContent,
+              canSend: computeCanSend(),
+              panelHidden: !!panel.hidden,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
+      // #endregion
+
+      if (!isEditing) {
+        // open editor (enable panel)
+        isEditing = true;
+        panel.hidden = false;
+        setControlsEnabled(true);
+        syncActionButton();
+
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "df48cc",
+            },
+            body: JSON.stringify({
+              sessionId: "df48cc",
+              runId: "pre-fix",
+              hypothesisId: "H6",
+              location: "script.js:rateActionBtn.click",
+              message: "Editor opened and enabled",
+              data: {
+                marketKey,
+                isEditing,
+                panelHidden: !!panel.hidden,
+                textDisabled: !!textEl.disabled,
+                starsDisabled: [
+                  ...starsWrap.querySelectorAll(".rate-star"),
+                ].every((s) => !!s.disabled),
+              },
+              timestamp: Date.now(),
+            }),
+          },
+        ).catch(() => {});
+        // #endregion
+        return;
+      }
+
+      if (!computeCanSend()) {
+        // should be disabled, but keep safe
+        return;
+      }
+
+      const rating = Number(selected || 0);
+      const reviewText = (textEl.value || "").trim().slice(0, 500);
+      _saveUserMarketReview(marketKey, rating, reviewText);
+
+      const agg2 = _getMarketAggregateFromProfiles(marketKey);
+      const avgText = agg2.count ? agg2.avg.toFixed(1) : "—";
+      const countText = String(agg2.count || 0);
+      m.rating = avgText;
+      m.reviews = countText;
+
+      const aggRatingEl = document.getElementById("profAggRating");
+      const aggCountEl = document.getElementById("profAggCount");
+      if (aggRatingEl) aggRatingEl.textContent = avgText;
+      if (aggCountEl) aggCountEl.textContent = countText;
+
+      // Update comments list to include the new comment immediately
+      const list = document.getElementById("profReviewsList");
+      if (list) {
+        const all = _getAllMarketReviews(marketKey);
+        const max = 12;
+        list.innerHTML = all
+          .slice(0, max)
+          .map((r) => {
+            const stars =
+              "★".repeat(r.rating) + "☆".repeat(Math.max(0, 5 - r.rating));
+            const date = r.updatedAt
+              ? new Date(r.updatedAt).toLocaleDateString()
+              : "";
+            const isMe = r.userKey === _getUserKey();
+            return `
+              <div class="review-item">
+                <div class="review-top">
+                  <div class="review-stars">${stars} ${
+                    isMe ? `<span class="review-me">أنت</span>` : ""
+                  }</div>
+                  <div class="review-date">${_escapeHtml(date)}</div>
+                </div>
+                <div class="review-text">${_escapeHtml(r.text)}</div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      msg.textContent = "تم حفظ تقييمك بنجاح.";
+
+      // Close until user chooses to edit
+      isEditing = false;
+      panel.hidden = true;
+      setControlsEnabled(false);
+      syncActionButton();
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "df48cc",
+          },
+          body: JSON.stringify({
+            sessionId: "df48cc",
+            runId: "pre-fix",
+            hypothesisId: "H3",
+            location: "script.js:rateActionBtn.click",
+            message: "Rating saved and panel closed",
+            data: {
+              marketKey,
+              rating,
+              hasText: !!reviewText,
+              avgText,
+              countText,
+              isEditing,
+              panelHidden: !!panel.hidden,
+              actionLabel: actionBtn.textContent,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
+      // #endregion
+    });
+
+    // #region agent log
+    fetch("http://127.0.0.1:7785/ingest/d54f86b6-dc38-4ee5-bce3-2073a1b440df", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "df48cc",
+      },
+      body: JSON.stringify({
+        sessionId: "df48cc",
+        runId: "pre-fix",
+        hypothesisId: "H5",
+        location: "script.js:initRatingUI",
+        message: "Rating UI initialized",
+        data: {
+          marketKey,
+          existingRating: existing.rating,
+          existingHasText: !!existing.reviewText,
+          isEditing,
+          panelHidden: !!panel.hidden,
+          actionLabel: actionBtn.textContent,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    // Initial disabled state until edit
+    setControlsEnabled(false);
+    paint();
+  })();
 }
 
 function updateProfileMap(vendor) {

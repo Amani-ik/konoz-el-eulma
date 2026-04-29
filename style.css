@@ -857,6 +857,192 @@ body {
   background: linear-gradient(135deg, #7fffa5, #36ea69, #0fcb5e);
   -webkit-text-fill-color: #ffffff;
 }
+
+/* Ratings (Profile) */
+.rate-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.rate-toggle {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: "Nunito", sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: #111;
+  background: #f6f7f9;
+  transition: transform 0.12s, filter 0.12s, border-color 0.12s;
+}
+.rate-toggle:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+.rate-action {
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: "Nunito", sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--rateAccent, #e67e22);
+  transition: transform 0.12s, filter 0.12s, opacity 0.12s;
+}
+.rate-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.rate-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+.rate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rate-panel.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.rate-stars {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.rate-star {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f6f7f9;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  color: #b8bec7;
+  transition: transform 0.12s, filter 0.12s, background 0.12s, color 0.12s;
+}
+.rate-star:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+.rate-star.on {
+  background: #fff4ea; /* fallback */
+  background: color-mix(in srgb, var(--rateAccent, #e67e22) 16%, #ffffff);
+  color: var(--rateAccent, #e67e22);
+  border-color: rgba(230, 126, 34, 0.28); /* fallback */
+  border-color: color-mix(in srgb, var(--rateAccent, #e67e22) 35%, #ffffff);
+}
+.rate-hint {
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+  font-weight: 700;
+}
+.rate-text {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 12px 12px;
+  resize: vertical;
+  font-family: "Nunito", sans-serif;
+  font-size: 14px;
+  outline: none;
+}
+.rate-text:focus {
+  border-color: var(--rateAccent, #e67e22);
+  box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.14);
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--rateAccent, #e67e22) 14%, transparent);
+}
+.rate-submit {
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: "Nunito", sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--rateAccent, #e67e22);
+  transition: transform 0.12s, filter 0.12s;
+}
+.rate-submit:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.rate-msg {
+  text-align: center;
+  color: #2d6a4f;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 18px;
+}
+
+/* Reviews list */
+.reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.review-empty {
+  text-align: center;
+  color: #666;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px 0;
+}
+.review-item {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fbfbfc;
+  border-radius: 16px;
+  padding: 12px 12px;
+}
+.review-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.review-stars {
+  color: var(--rateAccent, #e67e22);
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+.review-me {
+  display: inline-block;
+  margin-inline-start: 8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #111;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.review-date {
+  color: #888;
+  font-size: 12px;
+  font-weight: 800;
+}
+.review-text {
+  color: #222;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 700;
+  white-space: pre-wrap;
+}
 .soc-btn:hover {
   transform: scale(1.1);
 }
