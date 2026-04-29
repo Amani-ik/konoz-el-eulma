@@ -35,7 +35,6 @@ function hideSkeleton() {
       loginScreen.classList.remove("hidden");
     }
   }
-
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1839,6 +1838,54 @@ function changeLB(n) {
 function closeLB() {
   document.getElementById("lightbox").style.display = "none";
 }
+
+/* ════ SWIPE/TOUCH NAVIGATION ════ */
+let touchStartX = 0;
+let touchEndX = 0;
+let touchStartY = 0;
+let touchEndY = 0;
+
+function handleSwipe() {
+  const diffX = touchStartX - touchEndX;
+  const diffY = touchStartY - touchEndY;
+
+  // Only register swipe if horizontal movement is greater than vertical
+  if (Math.abs(diffX) > Math.abs(diffY)) {
+    // Minimum swipe distance (50px)
+    if (Math.abs(diffX) > 50) {
+      if (diffX > 0) {
+        // Swipe left - show next image
+        changeLB(1);
+      } else {
+        // Swipe right - show previous image
+        changeLB(-1);
+      }
+    }
+  }
+}
+
+const lightbox = document.getElementById("lightbox");
+
+// Touch start event
+lightbox.addEventListener(
+  "touchstart",
+  (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  },
+  false,
+);
+
+// Touch end event
+lightbox.addEventListener(
+  "touchend",
+  (e) => {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+  },
+  false,
+);
 
 /* ════ NEWSFEED ════ */
 
