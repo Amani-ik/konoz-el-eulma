@@ -10,13 +10,6 @@ import {
   query,
   where,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-<<<<<<< HEAD
-=======
-import {
-  query,
-  where,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
->>>>>>> ff325510e9019675446860450f9c5212247fdfae
 // ════════════════════════════════════════════════════════════════
 // ═══ نظام الهيكل العظمي - كنوز العلمة ═══
 // ════════════════════════════════════════════════════════════════
@@ -603,40 +596,6 @@ async function _getUserMarketReview(marketKey) {
     return { rating: rv.rating || 0, reviewText: rv.text || "" };
   }
   return { rating: 0, reviewText: "" };
-<<<<<<< HEAD
-}
-
-async function _saveUserMarketReview(marketKey, rating, reviewText) {
-  const userKey = _getUserKey();
-  const reviewRef = doc(db, "reviews", `${userKey}__${marketKey}`);
-  await setDoc(reviewRef, {
-    userKey,
-    marketKey,
-    rating,
-    text: reviewText,
-    updatedAt: Date.now(),
-  });
-}
-
-async function _getAllMarketReviews(marketKey) {
-  const reviewsRef = collection(db, "reviews");
-  const q = query(reviewsRef, where("marketKey", "==", marketKey));
-  const snapshot = await getDocs(q);
-  const out = [];
-  snapshot.forEach((docSnap) => {
-    const rv = docSnap.data();
-    if (rv.rating >= 1 && rv.rating <= 5 && rv.text?.trim()) {
-      out.push({
-        userKey: rv.userKey,
-        rating: rv.rating,
-        text: rv.text,
-        updatedAt: rv.updatedAt || 0,
-      });
-    }
-  });
-  return out.sort((a, b) => b.updatedAt - a.updatedAt);
-=======
->>>>>>> ff325510e9019675446860450f9c5212247fdfae
 }
 
 async function _saveUserMarketReview(marketKey, rating, reviewText) {
@@ -670,9 +629,31 @@ async function _getAllMarketReviews(marketKey) {
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-const existing = await _getUserMarketReview(marketKey);
-const reviews = await _getAllMarketReviews(marketKey);
-await _saveUserMarketReview(marketKey, rating, reviewText);
+// Get aggregate rating from Firebase reviews
+async function _getMarketAggregateFromFirebase(marketKey) {
+  try {
+    const reviews = await _getAllMarketReviews(marketKey);
+    if (!reviews.length) {
+      return { avg: 0, count: 0 };
+    }
+    const sum = reviews.reduce((total, r) => total + (r.rating || 0), 0);
+    const avg = sum / reviews.length;
+    return { avg, count: reviews.length };
+  } catch (error) {
+    console.error("Error calculating Firebase aggregate:", error);
+    return { avg: 0, count: 0 };
+  }
+}
+
+// Helper to add missing properties to review objects
+function _normalizeReviewData(review) {
+  return {
+    userKey: review.userKey || "anonymous",
+    rating: review.rating || 0,
+    text: review.text || "",
+    updatedAt: review.updatedAt || Date.now(),
+  };
+}
 
 /* ══ LOGIN ══ */
 (() => {
@@ -1442,11 +1423,11 @@ function openProfile() {
   updateProfileMap(m);
 
   // Render other users' comments
-  (function renderReviewsList() {
+  (async function renderReviewsList() {
     const list = document.getElementById("profReviewsList");
     if (!list) return;
     const me = _getUserKey();
-    const all = _getAllMarketReviews(marketKey);
+    const all = await _getAllMarketReviews(marketKey);
     if (!all.length) {
       list.innerHTML = `<div class="review-empty">لا توجد تعليقات بعد. كن أول من يكتب تعليقاً.</div>`;
       return;
@@ -1724,7 +1705,7 @@ function openProfile() {
       const reviewText = (textEl.value || "").trim().slice(0, 500);
       await _saveUserMarketReview(marketKey, rating, reviewText);
 
-      const agg2 = _getMarketAggregateFromProfiles(marketKey);
+      const agg2 = await _getMarketAggregateFromFirebase(marketKey);
       const avgText = agg2.count ? agg2.avg.toFixed(1) : "—";
       const countText = String(agg2.count || 0);
       m.rating = avgText;
@@ -3268,7 +3249,6 @@ loadReviews();
   // Registration/Login
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
-<<<<<<< HEAD
 
   // reviews
   async function loadReviews() {
@@ -3280,6 +3260,4 @@ loadReviews();
 
   // نعيطو للدالة باش تخدم
   loadReviews();
-=======
->>>>>>> ff325510e9019675446860450f9c5212247fdfae
 })();
