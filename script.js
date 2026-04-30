@@ -10,6 +10,13 @@ import {
   query,
   where,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<<<<<<< HEAD
+=======
+import {
+  query,
+  where,
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+>>>>>>> ff325510e9019675446860450f9c5212247fdfae
 // ════════════════════════════════════════════════════════════════
 // ═══ نظام الهيكل العظمي - كنوز العلمة ═══
 // ════════════════════════════════════════════════════════════════
@@ -596,6 +603,40 @@ async function _getUserMarketReview(marketKey) {
     return { rating: rv.rating || 0, reviewText: rv.text || "" };
   }
   return { rating: 0, reviewText: "" };
+<<<<<<< HEAD
+}
+
+async function _saveUserMarketReview(marketKey, rating, reviewText) {
+  const userKey = _getUserKey();
+  const reviewRef = doc(db, "reviews", `${userKey}__${marketKey}`);
+  await setDoc(reviewRef, {
+    userKey,
+    marketKey,
+    rating,
+    text: reviewText,
+    updatedAt: Date.now(),
+  });
+}
+
+async function _getAllMarketReviews(marketKey) {
+  const reviewsRef = collection(db, "reviews");
+  const q = query(reviewsRef, where("marketKey", "==", marketKey));
+  const snapshot = await getDocs(q);
+  const out = [];
+  snapshot.forEach((docSnap) => {
+    const rv = docSnap.data();
+    if (rv.rating >= 1 && rv.rating <= 5 && rv.text?.trim()) {
+      out.push({
+        userKey: rv.userKey,
+        rating: rv.rating,
+        text: rv.text,
+        updatedAt: rv.updatedAt || 0,
+      });
+    }
+  });
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+=======
+>>>>>>> ff325510e9019675446860450f9c5212247fdfae
 }
 
 async function _saveUserMarketReview(marketKey, rating, reviewText) {
@@ -628,6 +669,10 @@ async function _getAllMarketReviews(marketKey) {
   });
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
+
+const existing = await _getUserMarketReview(marketKey);
+const reviews = await _getAllMarketReviews(marketKey);
+await _saveUserMarketReview(marketKey, rating, reviewText);
 
 /* ══ LOGIN ══ */
 (() => {
@@ -3150,6 +3195,17 @@ function goToNewsMarket(newsId) {
   });
 })();
 
+// reviews
+async function loadReviews() {
+  const querySnapshot = await getDocs(collection(db, "reviews"));
+  querySnapshot.forEach((doc) => {
+    console.log("التعليق من Firestore: ", doc.data().text);
+  });
+}
+
+// نعيطو للدالة باش تخدم
+loadReviews();
+
 // ════════════════════════════════════════════════════════════════
 // ═══ تعريض جميع الدوال المطلوبة على المستوى العام ═══
 // ════════════════════════════════════════════════════════════════
@@ -3212,6 +3268,7 @@ function goToNewsMarket(newsId) {
   // Registration/Login
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
+<<<<<<< HEAD
 
   // reviews
   async function loadReviews() {
@@ -3223,4 +3280,6 @@ function goToNewsMarket(newsId) {
 
   // نعيطو للدالة باش تخدم
   loadReviews();
+=======
+>>>>>>> ff325510e9019675446860450f9c5212247fdfae
 })();
