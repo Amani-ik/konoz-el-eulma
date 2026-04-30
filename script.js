@@ -6,8 +6,7 @@ import {
   setDoc,
   collection,
   getDocs,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import {
+  getDoc,
   query,
   where,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -629,10 +628,6 @@ async function _getAllMarketReviews(marketKey) {
   });
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
-
-const existing = await _getUserMarketReview(marketKey);
-const reviews = await _getAllMarketReviews(marketKey);
-await _saveUserMarketReview(marketKey, rating, reviewText);
 
 /* ══ LOGIN ══ */
 (() => {
@@ -1460,7 +1455,7 @@ function openProfile() {
   })();
 
   // Initialize rating UI (after DOM injected)
-  (function initRatingUI() {
+  (async function initRatingUI() {
     const actionBtn = document.getElementById("rateActionBtn");
     const panel = document.getElementById("ratePanel");
     const starsWrap = document.getElementById("rateStars");
@@ -1479,7 +1474,7 @@ function openProfile() {
     )
       return;
 
-    const existing = _getUserMarketReview(marketKey);
+    const existing = await _getUserMarketReview(marketKey);
     let selected = existing.rating || 0;
     textEl.value = existing.reviewText || "";
 
@@ -1605,7 +1600,7 @@ function openProfile() {
       // #endregion
     });
 
-    actionBtn.addEventListener("click", () => {
+    actionBtn.addEventListener("click", async () => {
       msg.textContent = "";
 
       // #region agent log
@@ -1682,7 +1677,7 @@ function openProfile() {
 
       const rating = Number(selected || 0);
       const reviewText = (textEl.value || "").trim().slice(0, 500);
-      _saveUserMarketReview(marketKey, rating, reviewText);
+      await _saveUserMarketReview(marketKey, rating, reviewText);
 
       const agg2 = _getMarketAggregateFromProfiles(marketKey);
       const avgText = agg2.count ? agg2.avg.toFixed(1) : "—";
@@ -1698,7 +1693,7 @@ function openProfile() {
       // Update comments list to include the new comment immediately
       const list = document.getElementById("profReviewsList");
       if (list) {
-        const all = _getAllMarketReviews(marketKey);
+        const all = await _getAllMarketReviews(marketKey);
         const max = 12;
         list.innerHTML = all
           .slice(0, max)
@@ -2238,7 +2233,7 @@ document.addEventListener("click", (e) => {
 });
 
 /* ══ PERSISTENCE RESTORE ══ */
-window.addEventListener("DOMContentLoaded", () => {
+function initializePersistence() {
   // One-time reload after a successful login (prevents stale UI/state)
   if (sessionStorage.getItem("loginReloadOnce") === "1") {
     sessionStorage.removeItem("loginReloadOnce");
@@ -2296,7 +2291,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (lastScreen === "worldScreen") {
     document.getElementById("worldScreen").classList.remove("hidden");
-    setTimeout(buildWorld, 100);
+    setTimeout(() => {
+      buildWorld();
+      centerWorld();
+      setTimeout(() => animZoomTo(47, 40), 500);
+    }, 100);
   } else if (lastScreen === "districtScreen") {
     // c) Restaurer le district
     const lastDistIdx = localStorage.getItem("lastDistIdx");
@@ -2398,6 +2397,28 @@ window.addEventListener("DOMContentLoaded", () => {
     // Écran inconnu → world
     document.getElementById("worldScreen").classList.remove("hidden");
     setTimeout(buildWorld, 100);
+  }
+}
+
+// Call initialization on DOMContentLoaded
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializePersistence);
+} else {
+  // DOM is already loaded
+  initializePersistence();
+}
+
+// Also call on load event as a backup
+window.addEventListener("load", () => {
+  // Ensure initialization happened
+  const savedUser = localStorage.getItem("savedUser");
+  const lastScreen = localStorage.getItem("lastScreen");
+  if (savedUser && lastScreen !== "loginScreen") {
+    const csBtn = document.getElementById("csBtn");
+    if (csBtn && csBtn.style.display === "none") {
+      // Re-run initialization if it didn't complete
+      initializePersistence();
+    }
   }
 });
 
@@ -3129,17 +3150,6 @@ function goToNewsMarket(newsId) {
   });
 })();
 
-// reviews
-async function loadReviews() {
-  const querySnapshot = await getDocs(collection(db, "reviews"));
-  querySnapshot.forEach((doc) => {
-    console.log("التعليق من Firestore: ", doc.data().text);
-  });
-}
-
-// نعيطو للدالة باش تخدم
-loadReviews();
-
 // ════════════════════════════════════════════════════════════════
 // ═══ تعريض جميع الدوال المطلوبة على المستوى العام ═══
 // ════════════════════════════════════════════════════════════════
@@ -3202,4 +3212,15 @@ loadReviews();
   // Registration/Login
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
+
+  // reviews
+  async function loadReviews() {
+    const querySnapshot = await getDocs(collection(db, "reviews"));
+    querySnapshot.forEach((doc) => {
+      console.log("التعليق من Firestore: ", doc.data());
+    });
+  }
+
+  // نعيطو للدالة باش تخدم
+  loadReviews();
 })();
