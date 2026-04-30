@@ -2,10 +2,15 @@ import { auth } from "./firebase-config.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db } from "./firebase-config.js";
 import {
+  doc,
+  setDoc,
   collection,
   getDocs,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+import {
+  query,
+  where,
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 // ════════════════════════════════════════════════════════════════
 // ═══ نظام الهيكل العظمي - كنوز العلمة ═══
 // ════════════════════════════════════════════════════════════════
@@ -583,52 +588,51 @@ function _getMarketAggregateFromProfiles(marketKey) {
   return { avg, count };
 }
 
-function _getUserMarketReview(marketKey) {
+async function _getUserMarketReview(marketKey) {
   const userKey = _getUserKey();
-  const store = _loadProfilesStore();
-  const p = store[userKey];
-  const rating = p && p.rating ? p.rating[marketKey] : undefined;
-  const review = p && p.reviews ? p.reviews[marketKey] : undefined;
-  return {
-    rating: typeof rating === "number" ? rating : 0,
-    reviewText: review && typeof review.text === "string" ? review.text : "",
-  };
-}
-
-function _saveUserMarketReview(marketKey, rating, reviewText) {
-  const userKey = _getUserKey();
-  const store = _loadProfilesStore();
-  const p = _ensureUserProfile(store, userKey);
-  p.rating[marketKey] = rating;
-  p.reviews[marketKey] = {
-    text: reviewText,
-    rating,
-    updatedAt: Date.now(),
-  };
-  _saveProfilesStore(store);
-}
-
-function _getAllMarketReviews(marketKey) {
-  const store = _loadProfilesStore();
-  const out = [];
-  for (const userKey in store) {
-    const p = store[userKey];
-    const rv = p && p.reviews ? p.reviews[marketKey] : null;
-    if (!rv || typeof rv !== "object") continue;
-    const rating = Number(rv.rating || 0);
-    const text = typeof rv.text === "string" ? rv.text.trim() : "";
-    if (!(rating >= 1 && rating <= 5)) continue;
-    if (!text) continue; // only show comments with text
-    out.push({
-      userKey,
-      rating,
-      text,
-      updatedAt: Number(rv.updatedAt || 0),
-    });
+  const reviewRef = doc(db, "reviews", `${userKey}__${marketKey}`);
+  const snap = await getDoc(reviewRef);
+  if (snap.exists()) {
+    const rv = snap.data();
+    return { rating: rv.rating || 0, reviewText: rv.text || "" };
   }
-  out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  return out;
+  return { rating: 0, reviewText: "" };
 }
+
+async function _saveUserMarketReview(marketKey, rating, reviewText) {
+  const userKey = _getUserKey();
+  const reviewRef = doc(db, "reviews", `${userKey}__${marketKey}`);
+  await setDoc(reviewRef, {
+    userKey,
+    marketKey,
+    rating,
+    text: reviewText,
+    updatedAt: Date.now(),
+  });
+}
+
+async function _getAllMarketReviews(marketKey) {
+  const reviewsRef = collection(db, "reviews");
+  const q = query(reviewsRef, where("marketKey", "==", marketKey));
+  const snapshot = await getDocs(q);
+  const out = [];
+  snapshot.forEach((docSnap) => {
+    const rv = docSnap.data();
+    if (rv.rating >= 1 && rv.rating <= 5 && rv.text?.trim()) {
+      out.push({
+        userKey: rv.userKey,
+        rating: rv.rating,
+        text: rv.text,
+        updatedAt: rv.updatedAt || 0,
+      });
+    }
+  });
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+const existing = await _getUserMarketReview(marketKey);
+const reviews = await _getAllMarketReviews(marketKey);
+await _saveUserMarketReview(marketKey, rating, reviewText);
 
 /* ══ LOGIN ══ */
 (() => {
@@ -3125,6 +3129,17 @@ function goToNewsMarket(newsId) {
   });
 })();
 
+// reviews
+async function loadReviews() {
+  const querySnapshot = await getDocs(collection(db, "reviews"));
+  querySnapshot.forEach((doc) => {
+    console.log("التعليق من Firestore: ", doc.data().text);
+  });
+}
+
+// نعيطو للدالة باش تخدم
+loadReviews();
+
 // ════════════════════════════════════════════════════════════════
 // ═══ تعريض جميع الدوال المطلوبة على المستوى العام ═══
 // ════════════════════════════════════════════════════════════════
@@ -3187,15 +3202,4 @@ function goToNewsMarket(newsId) {
   // Registration/Login
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
-
-  // reviews
-  async function loadReviews() {
-    const querySnapshot = await getDocs(collection(db, "reviews"));
-    querySnapshot.forEach((doc) => {
-      console.log("التعليق من Firestore: ", doc.data().text);
-    });
-  }
-
-  // نعيطو للدالة باش تخدم
-  loadReviews();
 })();
