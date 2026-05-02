@@ -9,7 +9,41 @@ import {
   getDoc,
   query,
   where,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// ════════════════════════════════════════════════════════════════
+// ═══ إنشاء وثيقة المستخدم الجديد في Firestore ═══
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * وظيفة لتسجيل بيانات المستخدم الجديد في Firestore
+ * @param {string} userId    - الـ UID الفريد الذي يولده Firebase Auth
+ * @param {string} name      - اسم المستخدم الذي اختاره
+ * @param {string} userEmail - البريد الإلكتروني
+ * @param {string} userRole  - نوع الحساب (admin, client, أو supplier)
+ */
+async function createNewUserDocument(userId, name, userEmail, userRole = "client") {
+  try {
+    const userDocRef = doc(db, "users", userId);
+    const userData = {
+      username: name,
+      email: userEmail,
+      role: userRole,
+    };
+    // Only set created_at if this is a new document
+    const existingDoc = await getDoc(userDocRef);
+    if (!existingDoc.exists()) {
+      userData.created_at = serverTimestamp();
+    }
+    await setDoc(userDocRef, userData, { merge: true });
+    console.log("تم حفظ بيانات المستخدم بنجاح في Firestore!");
+  } catch (error) {
+    console.error("حدث خطأ أثناء حفظ بيانات المستخدم:", error);
+  }
+}
+window.createNewUserDocument = createNewUserDocument;
+
 // ════════════════════════════════════════════════════════════════
 // ═══ نظام الهيكل العظمي - كنوز العلمة ═══
 // ════════════════════════════════════════════════════════════════
@@ -130,15 +164,22 @@ async function handleLogin() {
 
     console.log("✓ تم دخول المستخدم:", user.email);
 
+    // Extract username from email (part before @)
+    const username = email.split("@")[0];
+
     // حفظ بيانات المستخدم محلياً
     localStorage.setItem(
       "savedUser",
       JSON.stringify({
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || "مستكشف",
+        username: username,
+        displayName: user.displayName || username,
       }),
     );
+
+    // Save user document to Firestore with username
+    await createNewUserDocument(user.uid, username, user.email, "client");
 
     // حفظ آخر شاشة تم زيارتها
     localStorage.setItem("lastScreen", "worldScreen");
@@ -551,6 +592,21 @@ function _getUserKey() {
   );
 }
 
+// Returns the best available display name for the current logged-in user
+function _getCurrentUsername() {
+  const savedUserRaw = localStorage.getItem("savedUser");
+  const savedUser = _safeJsonParse(savedUserRaw, null);
+  if (savedUser) {
+    // Use username if stored (part before @)
+    if (savedUser.username) return savedUser.username;
+    // Fallback to displayName
+    if (savedUser.displayName) return savedUser.displayName;
+    // Last resort: derive from email
+    if (savedUser.email) return savedUser.email.split("@")[0];
+  }
+  return S.user || "مجهول";
+}
+
 function _getMarketKey(distId, mktIdx) {
   return `${distId}:${mktIdx}`;
 }
@@ -600,9 +656,11 @@ async function _getUserMarketReview(marketKey) {
 
 async function _saveUserMarketReview(marketKey, rating, reviewText) {
   const userKey = _getUserKey();
+  const username = _getCurrentUsername();
   const reviewRef = doc(db, "reviews", `${userKey}__${marketKey}`);
   await setDoc(reviewRef, {
     userKey,
+    username,
     marketKey,
     rating,
     text: reviewText,
@@ -620,6 +678,7 @@ async function _getAllMarketReviews(marketKey) {
     if (rv.rating >= 1 && rv.rating <= 5 && rv.text?.trim()) {
       out.push({
         userKey: rv.userKey,
+        username: rv.username || null,   // stored username (may be absent on old reviews)
         rating: rv.rating,
         text: rv.text,
         updatedAt: rv.updatedAt || 0,
@@ -653,6 +712,25 @@ function _normalizeReviewData(review) {
     text: review.text || "",
     updatedAt: review.updatedAt || Date.now(),
   };
+}
+
+// Helper to get a readable display name from a review entry.
+// Prefers the stored username field; falls back to parsing the userKey.
+function _getDisplayName(userKeyOrReview) {
+  // Accept either a plain userKey string or a review object {userKey, username}
+  let username = null;
+  let userKey = userKeyOrReview;
+  if (userKeyOrReview && typeof userKeyOrReview === "object") {
+    username = userKeyOrReview.username || null;
+    userKey = userKeyOrReview.userKey || "";
+  }
+  // Prefer the stored username from Firestore
+  if (username && username.trim()) return username.trim();
+  // Fall back: parse userKey
+  if (!userKey || userKey === "anonymous") return "مجهول";
+  if (userKey.includes("@")) return userKey.split("@")[0];
+  // Raw Firebase uid — truncate for readability
+  return userKey.slice(0, 8);
 }
 
 /* ══ LOGIN ══ */
@@ -1448,12 +1526,13 @@ function openProfile() {
           ? new Date(r.updatedAt).toLocaleDateString()
           : "";
         const isMe = r.userKey === me;
+        const authorLabel = isMe
+          ? `<span class="review-me">أنت</span>`
+          : `<span class="review-author">${_escapeHtml(_getDisplayName(r))}</span>`;
         return `
           <div class="review-item">
             <div class="review-top">
-              <div class="review-stars">${stars} ${
-                isMe ? `<span class="review-me">أنت</span>` : ""
-              }</div>
+              <div class="review-stars">${stars} ${authorLabel}</div>
               <div class="review-date">${_escapeHtml(date)}</div>
             </div>
             <div class="review-text">${_escapeHtml(r.text)}</div>
@@ -1714,6 +1793,8 @@ function openProfile() {
       const agg2 = await _getMarketAggregateFromFirebase(marketKey);
       const avgText = agg2.count ? agg2.avg.toFixed(1) : "—";
       const countText = String(agg2.count || 0);
+
+      // Update the market object in data.js (in-memory) so other UI is consistent
       m.rating = avgText;
       m.reviews = countText;
 
@@ -1726,6 +1807,7 @@ function openProfile() {
       const list = document.getElementById("profReviewsList");
       if (list) {
         const all = await _getAllMarketReviews(marketKey);
+        const meKey = _getUserKey();
         const max = 12;
         list.innerHTML = all
           .slice(0, max)
@@ -1735,13 +1817,14 @@ function openProfile() {
             const date = r.updatedAt
               ? new Date(r.updatedAt).toLocaleDateString()
               : "";
-            const isMe = r.userKey === _getUserKey();
+            const isMe = r.userKey === meKey;
+            const authorLabel = isMe
+              ? `<span class="review-me">أنت</span>`
+              : `<span class="review-author">${_escapeHtml(_getDisplayName(r))}</span>`;
             return `
               <div class="review-item">
                 <div class="review-top">
-                  <div class="review-stars">${stars} ${
-                    isMe ? `<span class="review-me">أنت</span>` : ""
-                  }</div>
+                  <div class="review-stars">${stars} ${authorLabel}</div>
                   <div class="review-date">${_escapeHtml(date)}</div>
                 </div>
                 <div class="review-text">${_escapeHtml(r.text)}</div>
@@ -2288,9 +2371,11 @@ function initializePersistence() {
       S.user = u.email || u.name;
       S.role = u.role;
       const hudUser = document.getElementById("hudUser");
-      if (hudUser)
-        hudUser.textContent =
-          "👤 " + (u.email ? u.email.split("@")[0] : u.name);
+      if (hudUser) {
+        // Use stored username if available, otherwise extract from email or use name
+        const displayName = u.username || (u.email ? u.email.split("@")[0] : u.name);
+        hudUser.textContent = "👤 " + displayName;
+      }
     } catch (e) {
       // données corrompues → on repart de zéro
       localStorage.removeItem("savedUser");
