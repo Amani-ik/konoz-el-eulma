@@ -1128,6 +1128,9 @@ function openMiniCard() {
   document
     .querySelectorAll(".zoom-controls")
     .forEach((c) => c.classList.add("hidden"));
+  // Hide customer service button when minicard opens
+  const csBtn = document.getElementById("csBtn");
+  if (csBtn) csBtn.classList.add("hidden-by-card");
 }
 function closeMiniCard() {
   document.getElementById("miniCard").classList.remove("open");
@@ -1139,6 +1142,9 @@ function closeMiniCard() {
     .forEach((p) => p.classList.remove("selected"));
   localStorage.removeItem("lastMiniCardOpen");
   localStorage.removeItem("lastMarketId");
+  // Show customer service button when minicard closes
+  const csBtn = document.getElementById("csBtn");
+  if (csBtn) csBtn.classList.remove("hidden-by-card");
 }
 function openComingSoon() {
   const o = document.getElementById("comingSoonOverlay");
@@ -1852,9 +1858,9 @@ function toSc(f, t) {
   document.getElementById(t).classList.remove("hidden");
   localStorage.setItem("lastScreen", t);
 
-  // Hide customer service button on login screen
+  // Hide customer service button on login screen or profile screen
   const csBtn = document.getElementById("csBtn");
-  if (t === "loginScreen") {
+  if (t === "loginScreen" || t === "profileScreen") {
     csBtn.style.display = "none";
   } else {
     csBtn.style.display = "flex";

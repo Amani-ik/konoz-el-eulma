@@ -655,6 +655,7 @@ body {
   font-weight: 900;
   color: #fff;
   transition: all 0.15s;
+  pointer-events: all;
 }
 .mc-view-btn:hover {
   filter: brightness(1.1);
@@ -876,7 +877,10 @@ body {
   font-weight: 900;
   color: #111;
   background: #f6f7f9;
-  transition: transform 0.12s, filter 0.12s, border-color 0.12s;
+  transition:
+    transform 0.12s,
+    filter 0.12s,
+    border-color 0.12s;
 }
 .rate-toggle:hover {
   transform: translateY(-1px);
@@ -894,7 +898,10 @@ body {
   font-weight: 900;
   color: #fff;
   background: var(--rateAccent, #e67e22);
-  transition: transform 0.12s, filter 0.12s, opacity 0.12s;
+  transition:
+    transform 0.12s,
+    filter 0.12s,
+    opacity 0.12s;
 }
 .rate-action:hover {
   transform: translateY(-1px);
@@ -930,7 +937,11 @@ body {
   font-size: 22px;
   line-height: 1;
   color: #b8bec7;
-  transition: transform 0.12s, filter 0.12s, background 0.12s, color 0.12s;
+  transition:
+    transform 0.12s,
+    filter 0.12s,
+    background 0.12s,
+    color 0.12s;
 }
 .rate-star:hover {
   transform: translateY(-1px);
@@ -976,7 +987,9 @@ body {
   font-weight: 900;
   color: #fff;
   background: var(--rateAccent, #e67e22);
-  transition: transform 0.12s, filter 0.12s;
+  transition:
+    transform 0.12s,
+    filter 0.12s;
 }
 .rate-submit:hover {
   transform: translateY(-1px);
@@ -1376,6 +1389,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  pointer-events: all;
 }
 .zoom-controls.hidden {
   opacity: 0;
@@ -1408,6 +1422,7 @@ body {
   user-select: none;
   position: relative;
   overflow: visible;
+  pointer-events: all;
 }
 .zoom-btn::after {
   content: "";
