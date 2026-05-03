@@ -23,7 +23,12 @@ import {
  * @param {string} userEmail - البريد الإلكتروني
  * @param {string} userRole  - نوع الحساب (admin, client, أو supplier)
  */
-async function createNewUserDocument(userId, name, userEmail, userRole = "client") {
+async function createNewUserDocument(
+  userId,
+  name,
+  userEmail,
+  userRole = "client",
+) {
   try {
     const userDocRef = doc(db, "users", userId);
     const userData = {
@@ -678,7 +683,7 @@ async function _getAllMarketReviews(marketKey) {
     if (rv.rating >= 1 && rv.rating <= 5 && rv.text?.trim()) {
       out.push({
         userKey: rv.userKey,
-        username: rv.username || null,   // stored username (may be absent on old reviews)
+        username: rv.username || null, // stored username (may be absent on old reviews)
         rating: rv.rating,
         text: rv.text,
         updatedAt: rv.updatedAt || 0,
@@ -1366,7 +1371,7 @@ dC.addEventListener("touchend", (e) => {
 });
 
 /* ══ FULL PROFILE ══ */
-function openProfile() {
+async function openProfile() {
   if (!S.activeMkt || !S.activeD) return;
   const m = S.activeMkt,
     d = S.activeD;
@@ -1374,7 +1379,19 @@ function openProfile() {
   const distMarkets = MARKETS[d.id] || [];
   const mktIdx = distMarkets.indexOf(m);
   const marketKey = _getMarketKey(d.id, mktIdx);
-  const agg = _getMarketAggregateFromProfiles(marketKey);
+
+  // Fetch ratings from Firebase instead of just localStorage
+  let agg;
+  try {
+    agg = await _getMarketAggregateFromFirebase(marketKey);
+  } catch (error) {
+    console.warn(
+      "Failed to fetch Firebase ratings, falling back to localStorage:",
+      error,
+    );
+    agg = _getMarketAggregateFromProfiles(marketKey);
+  }
+
   const aggAvgText = agg.count ? agg.avg.toFixed(1) : "—";
   const aggCountText = String(agg.count || 0);
   // Keep market object in sync (profile uses these fields)
@@ -2174,7 +2191,7 @@ function onUserMenuAction(action) {
   toggleUserMenu();
   switch (action) {
     case "account":
-      openProfile();
+      openProfile().catch(console.error);
       break;
     case "logout":
       if (typeof doLogout === "function") {
@@ -2373,7 +2390,8 @@ function initializePersistence() {
       const hudUser = document.getElementById("hudUser");
       if (hudUser) {
         // Use stored username if available, otherwise extract from email or use name
-        const displayName = u.username || (u.email ? u.email.split("@")[0] : u.name);
+        const displayName =
+          u.username || (u.email ? u.email.split("@")[0] : u.name);
         hudUser.textContent = "👤 " + displayName;
       }
     } catch (e) {
