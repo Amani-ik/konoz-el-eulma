@@ -1,0 +1,158 @@
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * FIRESTORE SECURITY RULES - قوانين أمان Firestore
+ * ═══════════════════════════════════════════════════════════════
+ * 
+ * انسخ هذه القوانين إلى Firebase Console:
+ * 1. اذهب إلى: Firebase Console > Firestore > Rules
+ * 2. استبدل المحتوى الحالي بهذا الملف
+ * 3. انقر على "Publish"
+ * 
+ * هذه القوانين توفر:
+ * - حماية بيانات المستخدم الشخصية
+ * - السماح بقراءة البيانات العامة فقط
+ * - منع حذف البيانات بشكل غير مصرح
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ═══ مجموعة المستخدمين (Users Collection) ═══
+    // بيانات المستخدم الشخصية
+    match /users/{uid} {
+      // السماح للمستخدم بقراءة ملفه الشخصي فقط
+      allow read: if request.auth.uid == uid;
+      
+      // السماح للمستخدم بتحديث ملفه الشخصي فقط
+      allow update: if request.auth.uid == uid
+        && (request.resource.data.keys().hasAll(['name', 'email']))
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.city is string;
+      
+      // السماح بإنشاء حساب جديد (من Firebase Auth trigger)
+      allow create: if request.auth.uid == uid;
+      
+      // السماح بحذف الحساب الخاص بالمستخدم فقط
+      allow delete: if request.auth.uid == uid;
+    }
+    
+    // ═══ مجموعة الموردين (Suppliers Collection) ═══
+    // بيانات الموردين العامة
+    match /suppliers/{supplierId} {
+      // السماح لجميع المستخدمين المسجلين بقراءة بيانات الموردين
+      allow read: if request.auth != null;
+      
+      // السماح للمورد بتحديث بيانات متجره فقط
+      allow update: if request.auth.uid == resource.data.userId;
+      
+      // السماح بإنشاء متجر موردين جديد
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.city is string;
+      
+      // السماح بحذف المتجر للمورد صاحبه فقط
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // ═══ مجموعة التعليقات (Reviews Collection) ═══
+    // تقييمات وتعليقات المستخدمين
+    match /reviews/{reviewId} {
+      // السماح لجميع المستخدمين المسجلين بقراءة التعليقات
+      allow read: if request.auth != null;
+      
+      // السماح بكتابة تعليق جديد
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.supplierId is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating > 0
+        && request.resource.data.rating <= 5
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0;
+      
+      // السماح للمستخدم بتحديث تعليقه فقط
+      allow update: if request.auth.uid == resource.data.userId
+        && request.resource.data.supplierId == resource.data.supplierId;
+      
+      // السماح للمستخدم بحذف تعليقه فقط
+      allow delete: if request.auth.uid == resource.data.userId;
+    }
+    
+    // ═══ مجموعة المفضلة (Favorites) ═══
+    // تخزين قائمة المفضلة للمستخدم داخل مستند المستخدم
+    // (مخزنة في /users/{uid}/favorites array)
+    
+    // ═══ مجموعة الرسائل (Messages Collection) ═══
+    // اختيارية - للتواصل بين المستخدمين والموردين
+    match /messages/{messageId} {
+      allow read: if request.auth.uid in [
+        resource.data.senderId,
+        resource.data.recipientId
+      ];
+      
+      allow create: if request.auth != null
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0;
+      
+      allow delete: if request.auth.uid == resource.data.senderId
+        && (request.time - resource.data.createdAt < duration.value(5, 'm'));
+    }
+    
+    // ═══ مجموعة الإشعارات (Notifications Collection) ═══
+    // إشعارات المستخدم
+    match /notifications/{userId}/items/{notificationId} {
+      allow read: if request.auth.uid == userId;
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == userId;
+      allow delete: if request.auth.uid == userId;
+    }
+    
+  }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * شرح القوانين الأمنية
+ * ═══════════════════════════════════════════════════════════════
+ * 
+ * 📌 المبادئ الأساسية للأمان:
+ * 
+ * 1. Authentication Check (التحقق من المصادقة)
+ *    request.auth != null
+ *    - يتحقق من أن المستخدم مسجل دخول
+ * 
+ * 2. User Identity Check (التحقق من الهوية)
+ *    request.auth.uid == uid
+ *    - يتحقق من أن المستخدم يعدّل بيانات نفسه فقط
+ * 
+ * 3. Data Validation (التحقق من صحة البيانات)
+ *    request.resource.data.name is string
+ *    - يتأكد من أن البيانات من النوع الصحيح
+ * 
+ * 4. Size Restrictions (تحديد حجم البيانات)
+ *    request.resource.data.text.size() > 0
+ *    - منع التعليقات الفارغة
+ * 
+ * 5. Rate Limiting (تحديد معدل الطلبات)
+ *    request.time - resource.data.createdAt < duration.value(5, 'm')
+ *    - السماح بحذف الرسالة خلال 5 دقائق فقط
+ * 
+ * ═══════════════════════════════════════════════════════════════
+ * 
+ * 🔒 حقوق الوصول:
+ * 
+ * ┌─────────────────┬─────────────┬──────────────┬────────┐
+ * │    Collection   │    Read     │    Write     │ Delete │\n * ├─────────────────┼─────────────┼──────────────┼────────┤
+ * │ users/{uid}     │ نفسه فقط    │ نفسه فقط     │ نفسه   │
+ * │ suppliers       │ مسجلون      │ صاحب المتجر  │ صاحب   │
+ * │ reviews         │ مسجلون      │ صاحب التقييم│ صاحب   │
+ * │ messages        │ المشاركون   │ المرسل       │ المرسل │
+ * │ notifications   │ المالك      │ الجميع       │ المالك │
+ * └─────────────────┴─────────────┴──────────────┴────────┘
+ */

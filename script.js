@@ -2190,11 +2190,162 @@ function toggleUserMenu() {
   }
 }
 
+async function openAccountProfile() {
+  const savedUserRaw = localStorage.getItem("savedUser");
+  let savedUser = null;
+  try {
+    savedUser = savedUserRaw ? JSON.parse(savedUserRaw) : null;
+  } catch (error) {
+    console.warn("Failed to parse savedUser:", error);
+  }
+
+  if (!savedUser && !(window.S && window.S.user)) {
+    alert("يجب تسجيل الدخول أولاً لعرض حسابك.");
+    return;
+  }
+
+  const uid = savedUser?.uid || null;
+  let accountData = {
+    username:
+      savedUser?.displayName ||
+      savedUser?.username ||
+      window.S?.user ||
+      "المستخدم",
+    email: savedUser?.email || "-",
+    role: savedUser?.role || "عميل",
+    created_at: savedUser?.created_at || null,
+    photoURL: savedUser?.photoURL || "",
+  };
+
+  if (uid) {
+    try {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        accountData = {
+          ...accountData,
+          ...userDoc.data(),
+        };
+      }
+    } catch (error) {
+      console.warn("خطأ في جلب بيانات حساب المستخدم من Firestore:", error);
+    }
+  }
+
+  // Populate account panel
+  const accountPanelName = document.getElementById("accountPanelName");
+  if (accountPanelName) {
+    accountPanelName.textContent = accountData.username || "المستخدم";
+  }
+
+  const accountAvatar = document.getElementById("accountAvatar");
+  if (accountAvatar) {
+    accountAvatar.src =
+      accountData.photoURL ||
+      "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiMxMTEiLz4KPHBhdGggZD0iTTMyIDI2QzM1LjMxNCAyNiAzOCA0NSAzMiAzOEMyOC42ODYgMzggMjYgMzUuMzE0IDI2IDMyWk0zMiAyMUMzNS4zMTQgMjEgMzggMjQuMzE0IDMyIDI4QzI4LjY4NiAzMiAyNiAyOC42ODYgMjYgMzJDMTkgMjEgMjEgMTkgMjEgMTlaTTIxIDIxQzIxIDIwLjQ0NyAyMS40NDcgMjAgMjIgMjBIMTQyQzQyLjQ1MyAyMCA0MyAyMC40NDcgNDMgMjFWMzJDNDMgNDIuNTUzIDQyLjU1MyA0MyA0MiA0M0gyMkM0MiA0MyA0MiA0Mi41NTMgNDIgNDJaIiBmaWxsPSIjNjY2Ii8+Cjwvc3ZnPgo=";
+  }
+
+  const accountName = document.getElementById("accountName");
+  if (accountName) {
+    accountName.textContent = accountData.username || "-";
+  }
+
+  const accountEmail = document.getElementById("accountEmail");
+  if (accountEmail) {
+    accountEmail.textContent = accountData.email || "-";
+  }
+
+  const accountRole = document.getElementById("accountRole");
+  if (accountRole) {
+    accountRole.textContent = accountData.role || "عميل";
+  }
+
+  const createdAtDate = accountData.created_at
+    ? new Date(
+        accountData.created_at.seconds
+          ? accountData.created_at.seconds * 1000
+          : accountData.created_at,
+      )
+    : null;
+  const createdAtText = createdAtDate
+    ? createdAtDate.toLocaleDateString("ar-SA", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "غير محدد";
+
+  const accountJoinDate = document.getElementById("accountJoinDate");
+  if (accountJoinDate) {
+    accountJoinDate.textContent = createdAtText;
+  }
+
+  const lastLoginText = accountData.lastLoginAt
+    ? new Date(accountData.lastLoginAt).toLocaleDateString("ar-SA", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "غير متوفر";
+
+  const accountLastLogin = document.getElementById("accountLastLogin");
+  if (accountLastLogin) {
+    accountLastLogin.textContent = lastLoginText;
+  }
+
+  const accountUID = document.getElementById("accountUID");
+  if (accountUID) {
+    accountUID.textContent = uid || "غير متوفر";
+  }
+
+  // Show account panel
+  showAccountPanel();
+}
+
+function showAccountPanel() {
+  const backdrop = document.getElementById("accountPanelBackdrop");
+  const panel = document.getElementById("accountPanel");
+
+  if (backdrop && panel) {
+    backdrop.classList.add("open");
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeAccountPanel() {
+  const backdrop = document.getElementById("accountPanelBackdrop");
+  const panel = document.getElementById("accountPanel");
+
+  if (backdrop && panel) {
+    backdrop.classList.remove("open");
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+  }
+}
+
+// Placeholder functions for account actions
+function editProfile() {
+  alert("ميزة تعديل الملف الشخصي قيد التطوير");
+}
+
+function changePassword() {
+  alert("ميزة تغيير كلمة المرور قيد التطوير");
+}
+
+function handleLogout() {
+  if (typeof doLogout === "function") {
+    closeAccountPanel();
+    doLogout();
+  } else {
+    alert("خطأ في تسجيل الخروج");
+  }
+}
+
 function onUserMenuAction(action) {
   toggleUserMenu();
   switch (action) {
     case "account":
-      openProfile().catch(console.error);
+      openAccountProfile().catch(console.error);
       break;
     case "logout":
       if (typeof doLogout === "function") {
@@ -3307,7 +3458,7 @@ loadReviews();
   window.toSc = toSc;
   window.goWorldBack = goWorldBack;
   window.enterDistrict = enterDistrict;
-  window.openProfile = openProfile;
+  window.openAccountProfile = openAccountProfile;
   window.closeProfile = closeProfile;
 
   // World Map
@@ -3361,6 +3512,13 @@ loadReviews();
   // Registration/Login
   window.toggleRegister = toggleRegister;
   window.doLogout = doLogout;
+
+  // Account Panel
+  window.showAccountPanel = showAccountPanel;
+  window.closeAccountPanel = closeAccountPanel;
+  window.editProfile = editProfile;
+  window.changePassword = changePassword;
+  window.handleLogout = handleLogout;
 
   // reviews
   async function loadReviews() {
