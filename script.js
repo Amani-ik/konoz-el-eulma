@@ -791,7 +791,10 @@ function doLogin() {
 }
 
 function toggleRegister() {
-  alert("سيتم فتح صفحة التسجيل قريباً"); // You can replace this with actual registration logic
+  const phone = "213699173103";
+  const text = encodeURIComponent("أريد التسجيل في كنوز العلمة");
+  const url = `https://wa.me/${phone}?text=${text}`;
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function doLogout() {
