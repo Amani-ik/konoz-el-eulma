@@ -31,15 +31,22 @@ async function createNewUserDocument(
 ) {
   try {
     const userDocRef = doc(db, "users", userId);
+    const existingDoc = await getDoc(userDocRef);
     const userData = {
+      uid: userId,
       username: name,
       email: userEmail,
       role: userRole,
+      fullName: name,
+      "full name": name,
+      phone: "-",
+      location: "-",
+      updated_at: serverTimestamp(),
     };
     // Only set created_at if this is a new document
-    const existingDoc = await getDoc(userDocRef);
     if (!existingDoc.exists()) {
       userData.created_at = serverTimestamp();
+      userData["created at"] = serverTimestamp();
     }
     await setDoc(userDocRef, userData, { merge: true });
     console.log("تم حفظ بيانات المستخدم بنجاح في Firestore!");
@@ -185,6 +192,14 @@ async function handleLogin() {
 
     // Save user document to Firestore with username
     await createNewUserDocument(user.uid, username, user.email, "client");
+    await _syncUserInfoToFirestore({
+      uid: user.uid,
+      username: username,
+      email: user.email || "-",
+      fullName: user.displayName || username,
+      role: "client",
+      photoURL: user.photoURL || DEFAULT_PROFILE_PHOTO,
+    });
 
     // حفظ آخر شاشة تم زيارتها
     localStorage.setItem("lastScreen", "worldScreen");
@@ -2190,6 +2205,9 @@ function toggleUserMenu() {
   }
 }
 
+const DEFAULT_PROFILE_PHOTO =
+  "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2080%2080%27%3E%3Ccircle%20cx%3D%2740%27%20cy%3D%2740%27%20r%3D%2740%27%20fill%3D%27%23212831%27/%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2754%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%20font-size%3D%2740%27%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E";
+
 async function openAccountProfile() {
   const savedUserRaw = localStorage.getItem("savedUser");
   let savedUser = null;
@@ -2213,17 +2231,25 @@ async function openAccountProfile() {
       "المستخدم",
     email: savedUser?.email || "-",
     role: savedUser?.role || "عميل",
-    created_at: savedUser?.created_at || null,
-    photoURL: savedUser?.photoURL || "",
+    created_at: null,
+    photoURL: savedUser?.photoURL || DEFAULT_PROFILE_PHOTO,
+    fullName: savedUser?.fullName || "",
+    phone: savedUser?.phone || "",
+    location: savedUser?.location || "",
   };
 
   if (uid) {
     try {
       const userDoc = await getDoc(doc(db, "users", uid));
       if (userDoc.exists()) {
+        const firestoreUserData = userDoc.data();
         accountData = {
           ...accountData,
-          ...userDoc.data(),
+          ...firestoreUserData,
+          fullName:
+            firestoreUserData.fullName || firestoreUserData["full name"] || "",
+          created_at:
+            firestoreUserData.created_at || firestoreUserData["created at"] || null,
         };
       }
     } catch (error) {
@@ -2239,9 +2265,7 @@ async function openAccountProfile() {
 
   const accountAvatar = document.getElementById("accountAvatar");
   if (accountAvatar) {
-    accountAvatar.src =
-      accountData.photoURL ||
-      "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiMxMTEiLz4KPHBhdGggZD0iTTMyIDI2QzM1LjMxNCAyNiAzOCA0NSAzMiAzOEMyOC42ODYgMzggMjYgMzUuMzE0IDI2IDMyWk0zMiAyMUMzNS4zMTQgMjEgMzggMjQuMzE0IDMyIDI4QzI4LjY4NiAzMiAyNiAyOC42ODYgMjYgMzJDMTkgMjEgMjEgMTkgMjEgMTlaTTIxIDIxQzIxIDIwLjQ0NyAyMS40NDcgMjAgMjIgMjBIMTQyQzQyLjQ1MyAyMCA0MyAyMC40NDcgNDMgMjFWMzJDNDMgNDIuNTUzIDQyLjU1MyA0MyA0MiA0M0gyMkM0MiA0MyA0MiA0Mi41NTMgNDIgNDJaIiBmaWxsPSIjNjY2Ii8+Cjwvc3ZnPgo=";
+    accountAvatar.src = accountData.photoURL || DEFAULT_PROFILE_PHOTO;
   }
 
   const accountName = document.getElementById("accountName");
@@ -2254,48 +2278,107 @@ async function openAccountProfile() {
     accountEmail.textContent = accountData.email || "-";
   }
 
+  const accountFullName = document.getElementById("accountFullName");
+  if (accountFullName) {
+    accountFullName.textContent = accountData.fullName || "-";
+  }
+
+  const accountPhone = document.getElementById("accountPhone");
+  if (accountPhone) {
+    accountPhone.textContent = accountData.phone || "-";
+  }
+
+  const accountLocation = document.getElementById("accountLocation");
+  if (accountLocation) {
+    let locationText = accountData.location || "-";
+    const coordsMatch =
+      typeof accountData.location === "string"
+        ? accountData.location
+            .trim()
+            .match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/)
+        : null;
+    if (coordsMatch) {
+      try {
+        const namedLocation = await _reverseGeocodeToName(
+          Number(coordsMatch[1]),
+          Number(coordsMatch[2]),
+        );
+        if (namedLocation) {
+          locationText = namedLocation;
+          await _saveAccountField("accountLocation", namedLocation);
+        }
+      } catch (error) {
+        console.warn("Failed to convert coordinates to location name:", error);
+      }
+    }
+
+    if (!locationText || locationText === "-") {
+      try {
+        const coords = await _getBrowserCoordinates();
+        const namedLocation = await _reverseGeocodeToName(
+          coords.latitude,
+          coords.longitude,
+        );
+        if (namedLocation) {
+          locationText = namedLocation;
+          accountData.location = namedLocation;
+          await _saveAccountField("accountLocation", namedLocation);
+        }
+      } catch (error) {
+        console.warn("Could not auto-detect device location:", error);
+      }
+    }
+    accountLocation.textContent = locationText;
+  }
+
   const accountRole = document.getElementById("accountRole");
   if (accountRole) {
     accountRole.textContent = accountData.role || "عميل";
   }
 
-  const createdAtDate = accountData.created_at
-    ? new Date(
-        accountData.created_at.seconds
-          ? accountData.created_at.seconds * 1000
-          : accountData.created_at,
-      )
-    : null;
-  const createdAtText = createdAtDate
-    ? createdAtDate.toLocaleDateString("ar-SA", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "غير محدد";
+  // Registration date: prefer Firebase Auth creation time when UID/email matches.
+  let registrationDate = null;
+  const authUser = auth.currentUser;
+  const authMatchesAccount =
+    !!authUser &&
+    ((uid && authUser.uid === uid) ||
+      (accountData.email &&
+        authUser.email &&
+        authUser.email.toLowerCase() === String(accountData.email).toLowerCase()));
+
+  if (authMatchesAccount && authUser.metadata?.creationTime) {
+    registrationDate = new Date(authUser.metadata.creationTime);
+  } else if (accountData.created_at) {
+    registrationDate = new Date(
+      accountData.created_at.seconds
+        ? accountData.created_at.seconds * 1000
+        : accountData.created_at,
+    );
+  }
+
+  const createdAtText = registrationDate
+    ? _formatDateAsDayMonthYear(registrationDate)
+    : "غير متوفر";
 
   const accountJoinDate = document.getElementById("accountJoinDate");
   if (accountJoinDate) {
     accountJoinDate.textContent = createdAtText;
   }
 
-  const lastLoginText = accountData.lastLoginAt
-    ? new Date(accountData.lastLoginAt).toLocaleDateString("ar-SA", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "غير متوفر";
-
-  const accountLastLogin = document.getElementById("accountLastLogin");
-  if (accountLastLogin) {
-    accountLastLogin.textContent = lastLoginText;
-  }
-
   const accountUID = document.getElementById("accountUID");
   if (accountUID) {
     accountUID.textContent = uid || "غير متوفر";
   }
+
+  await _syncUserInfoToFirestore({
+    username: accountData.username || "-",
+    email: accountData.email || "-",
+    fullName: accountData.fullName || "-",
+    phone: accountData.phone || "-",
+    location: accountData.location || "-",
+    role: accountData.role || "client",
+    photoURL: accountData.photoURL || DEFAULT_PROFILE_PHOTO,
+  });
 
   // Show account panel
   showAccountPanel();
@@ -2323,9 +2406,283 @@ function closeAccountPanel() {
   }
 }
 
-// Placeholder functions for account actions
-function editProfile() {
-  alert("ميزة تعديل الملف الشخصي قيد التطوير");
+function _getAccountFieldKey(fieldId) {
+  const map = {
+    accountName: "username",
+    accountFullName: "fullName",
+    accountPhone: "phone",
+    accountLocation: "location",
+  };
+  return map[fieldId] || null;
+}
+
+async function _saveAccountField(fieldId, value) {
+  const dbKey = _getAccountFieldKey(fieldId);
+  if (!dbKey) return;
+
+  const normalizedValue = value && value.trim() ? value.trim() : "-";
+  const savedUserRaw = localStorage.getItem("savedUser");
+  let savedUser = null;
+  try {
+    savedUser = savedUserRaw ? JSON.parse(savedUserRaw) : null;
+  } catch (error) {
+    console.warn("Failed to parse savedUser while saving profile field:", error);
+  }
+
+  if (savedUser) {
+    if (dbKey === "username") {
+      savedUser.username = normalizedValue;
+      savedUser.displayName = normalizedValue;
+      const panelName = document.getElementById("accountPanelName");
+      if (panelName) panelName.textContent = normalizedValue;
+      const menuName = document.getElementById("userMenuName");
+      if (menuName) menuName.textContent = normalizedValue;
+      const hudUser = document.getElementById("hudUser");
+      if (hudUser) hudUser.textContent = `👤 ${normalizedValue}`;
+    } else {
+      savedUser[dbKey] = normalizedValue;
+    }
+    localStorage.setItem("savedUser", JSON.stringify(savedUser));
+  }
+
+  if (savedUser?.uid) {
+    try {
+      await setDoc(
+        doc(db, "users", savedUser.uid),
+        { [dbKey]: normalizedValue },
+        { merge: true },
+      );
+    } catch (error) {
+      console.warn("تعذر حفظ تعديل الحقل في Firestore:", error);
+    }
+  }
+}
+
+async function _syncUserInfoToFirestore(accountData = {}) {
+  const savedUserRaw = localStorage.getItem("savedUser");
+  let savedUser = null;
+  try {
+    savedUser = savedUserRaw ? JSON.parse(savedUserRaw) : null;
+  } catch (error) {
+    console.warn("Failed to parse savedUser while syncing profile:", error);
+  }
+
+  const authUser = auth.currentUser;
+  const uid = savedUser?.uid || authUser?.uid || null;
+  if (!uid) return;
+
+  const payload = {
+    uid,
+    username:
+      accountData.username ||
+      savedUser?.username ||
+      savedUser?.displayName ||
+      authUser?.displayName ||
+      "-",
+    email: accountData.email || savedUser?.email || authUser?.email || "-",
+    fullName:
+      accountData.fullName ||
+      savedUser?.fullName ||
+      authUser?.displayName ||
+      "-",
+    phone: accountData.phone || savedUser?.phone || "-",
+    location: accountData.location || savedUser?.location || "-",
+    role: accountData.role || savedUser?.role || "client",
+    photoURL:
+      accountData.photoURL || savedUser?.photoURL || DEFAULT_PROFILE_PHOTO,
+    updated_at: serverTimestamp(),
+    "full name":
+      accountData.fullName ||
+      savedUser?.fullName ||
+      authUser?.displayName ||
+      "-",
+  };
+
+  try {
+    const userRef = doc(db, "users", uid);
+    const existingDoc = await getDoc(userRef);
+    if (!existingDoc.exists()) {
+      payload.created_at = serverTimestamp();
+      payload["created at"] = serverTimestamp();
+    } else {
+      const oldData = existingDoc.data() || {};
+      if (!oldData.created_at && !oldData["created at"]) {
+        payload.created_at = serverTimestamp();
+        payload["created at"] = serverTimestamp();
+      }
+    }
+    await setDoc(userRef, payload, { merge: true });
+  } catch (error) {
+    console.warn("تعذر مزامنة معلومات المستخدم في Firestore:", error);
+  }
+}
+
+async function _reverseGeocodeToName(latitude, longitude) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ar&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Reverse geocode failed: ${response.status}`);
+  }
+  const data = await response.json();
+  const address = data && data.address ? data.address : {};
+  const locality =
+    address.city ||
+    address.town ||
+    address.village ||
+    address.county ||
+    address.state ||
+    "";
+  const country = address.country || "";
+  const displayName = [locality, country].filter(Boolean).join(", ");
+  return displayName || data.display_name || null;
+}
+
+function _getBrowserCoordinates() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation not supported"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (error) => reject(error),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+  });
+}
+
+function _formatDateAsDayMonthYear(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "غير متوفر";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
+}
+
+function _setEditProfileButtonLabel(isEditing) {
+  const editProfileBtn = document.getElementById("editProfileBtn");
+  if (!editProfileBtn) return;
+  editProfileBtn.innerHTML = isEditing
+    ? '<span class="icon">💾</span>حفظ التعديلات'
+    : '<span class="icon">✏️</span>تعديل الملف الشخصي';
+}
+
+async function editProfile() {
+  const editableFieldIds = [
+    "accountName",
+    "accountFullName",
+    "accountPhone",
+  ];
+
+  const hasEditActions = editableFieldIds.some((fieldId) => {
+    const valueEl = document.getElementById(fieldId);
+    const detailEl = valueEl ? valueEl.closest(".account-detail") : null;
+    return !!(detailEl && detailEl.querySelector(".account-edit-actions"));
+  });
+
+  if (hasEditActions) {
+    for (const fieldId of editableFieldIds) {
+      const valueEl = document.getElementById(fieldId);
+      if (!valueEl) continue;
+      const detailEl = valueEl.closest(".account-detail");
+      if (!detailEl) continue;
+      const activeInput = detailEl.querySelector(".account-inline-input");
+      if (activeInput) {
+        const nextValue = activeInput.value.trim();
+        valueEl.textContent = nextValue || "-";
+        await _saveAccountField(fieldId, nextValue);
+      }
+      const actionsWrap = detailEl.querySelector(".account-edit-actions");
+      if (actionsWrap) actionsWrap.remove();
+      if (activeInput) activeInput.remove();
+      valueEl.style.display = "";
+    }
+    _setEditProfileButtonLabel(false);
+    return;
+  }
+
+  editableFieldIds.forEach((fieldId) => {
+    const valueEl = document.getElementById(fieldId);
+    if (!valueEl) return;
+    const detailEl = valueEl.closest(".account-detail");
+    if (!detailEl || detailEl.querySelector(".account-edit-actions")) return;
+
+    const actionsWrap = document.createElement("div");
+    actionsWrap.className = "account-edit-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "account-inline-btn account-inline-edit";
+    editBtn.title = "تعديل";
+    editBtn.textContent = "✏️";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "account-inline-btn account-inline-save";
+    saveBtn.title = "حفظ";
+    saveBtn.textContent = "💾";
+    saveBtn.style.display = "none";
+
+    let activeInput = null;
+    const enterEditMode = () => {
+      if (activeInput) return;
+      const original = (valueEl.textContent || "").trim();
+      const current = original === "-" ? "" : original;
+      activeInput = document.createElement("input");
+      activeInput.type = "text";
+      activeInput.className = "account-inline-input";
+      activeInput.value = current;
+      valueEl.style.display = "none";
+      detailEl.insertBefore(activeInput, actionsWrap);
+      activeInput.focus();
+      saveBtn.style.display = "inline-flex";
+    };
+
+    const finishFieldEditing = () => {
+      actionsWrap.remove();
+      if (activeInput) {
+        activeInput.remove();
+        activeInput = null;
+      }
+      valueEl.style.display = "";
+      const anyOpenEditors = editableFieldIds.some((id) => {
+        const el = document.getElementById(id);
+        const row = el ? el.closest(".account-detail") : null;
+        return !!(row && row.querySelector(".account-edit-actions"));
+      });
+      if (!anyOpenEditors) {
+        _setEditProfileButtonLabel(false);
+      }
+    };
+
+    const saveEdit = async () => {
+      if (!activeInput) return;
+      const nextValue = activeInput.value.trim();
+      valueEl.textContent = nextValue || "-";
+      activeInput.remove();
+      activeInput = null;
+      valueEl.style.display = "";
+      saveBtn.style.display = "none";
+      await _saveAccountField(fieldId, nextValue);
+      finishFieldEditing();
+    };
+
+    editBtn.addEventListener("click", enterEditMode);
+    saveBtn.addEventListener("click", saveEdit);
+
+    actionsWrap.appendChild(editBtn);
+    actionsWrap.appendChild(saveBtn);
+    detailEl.appendChild(actionsWrap);
+  });
+  _setEditProfileButtonLabel(true);
 }
 
 function changePassword() {

@@ -320,16 +320,28 @@
       <div class="account-panel-body">
         <div class="account-info-section">
           <div class="account-avatar">
-            <img id="accountAvatar" src="" alt="Avatar" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiMxMTEiLz4KPHBhdGggZD0iTTMyIDI2QzM1LjMxNCAyNiAzOCA0NSAzMiAzOEMyOC42ODYgMzggMjYgMzUuMzE0IDI2IDMyWk0zMiAyMUMzNS4zMTQgMjEgMzggMjQuMzE0IDMyIDI4QzI4LjY4NiAzMiAyNiAyOC42ODYgMjYgMzJDMTkgMjEgMjEgMTkgMjEgMTlaTTIxIDIxQzIxIDIwLjQ0NyAyMS40NDcgMjAgMjIgMjBIMTQyQzQyLjQ1MyAyMCA0MyAyMC40NDcgNDMgMjFWMzJDNDMgNDIuNTUzIDQyLjU1MyA0MyA0MiA0M0gyMkM0MiA0MyA0MiA0Mi41NTMgNDIgNDJaIiBmaWxsPSIjNjY2Ii8+Cjwvc3ZnPgo=';">
+            <img id="accountAvatar" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2080%2080%27%3E%3Ccircle%20cx%3D%2740%27%20cy%3D%2740%27%20r%3D%2740%27%20fill%3D%27%23212831%27/%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2754%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%20font-size%3D%2740%27%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E" alt="Avatar" onerror="this.src='data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2080%2080%27%3E%3Ccircle%20cx%3D%2740%27%20cy%3D%2740%27%20r%3D%2740%27%20fill%3D%27%23212831%27/%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2754%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%20font-size%3D%2740%27%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E';">
           </div>
           <div class="account-details">
             <div class="account-detail">
-              <span class="account-label">الاسم:</span>
+              <span class="account-label">اسم المستخدم:</span>
               <span class="account-value" id="accountName">-</span>
             </div>
             <div class="account-detail">
               <span class="account-label">البريد:</span>
               <span class="account-value" id="accountEmail">-</span>
+            </div>
+            <div class="account-detail">
+              <span class="account-label">الاسم الكامل:</span>
+              <span class="account-value" id="accountFullName">-</span>
+            </div>
+            <div class="account-detail">
+              <span class="account-label">رقم الهاتف:</span>
+              <span class="account-value" id="accountPhone">-</span>
+            </div>
+            <div class="account-detail">
+              <span class="account-label">الموقع:</span>
+              <span class="account-value" id="accountLocation">-</span>
             </div>
             <div class="account-detail">
               <span class="account-label">نوع الحساب:</span>
@@ -340,10 +352,6 @@
               <span class="account-value" id="accountJoinDate">-</span>
             </div>
             <div class="account-detail">
-              <span class="account-label">آخر دخول:</span>
-              <span class="account-value" id="accountLastLogin">-</span>
-            </div>
-            <div class="account-detail">
               <span class="account-label">معرف المستخدم:</span>
               <span class="account-value" id="accountUID">-</span>
             </div>
@@ -351,7 +359,7 @@
         </div>
         
         <div class="account-panel-section">الإجراءات</div>
-        <button class="account-panel-item" onclick="editProfile()">
+        <button class="account-panel-item" id="editProfileBtn" onclick="editProfile()">
           <span class="icon">✏️</span>تعديل الملف الشخصي
         </button>
         <button class="account-panel-item" onclick="changePassword()">
@@ -359,6 +367,22 @@
         </button>
         <button class="account-panel-item" onclick="closeAccountPanel(); toggleUserMenu()">
           <span class="icon">⬅️</span>العودة للقائمة
+        </button>
+        <div class="account-panel-section">الإعدادات</div>
+        <button class="account-panel-item" onclick="onUserMenuAction('notifications')">
+          <span class="icon">🔔</span>الإشعارات
+        </button>
+        <button class="account-panel-item" onclick="onUserMenuAction('weather')">
+          <span class="icon">🌦️</span>تأثيرات الطقس
+        </button>
+        <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')">
+          <span class="icon">⭐</span>الموردون المفضلون
+        </button>
+        <button class="account-panel-item" onclick="onUserMenuAction('privacyPolicy')">
+          <span class="icon">🛡️</span>سياسة الخصوصية
+        </button>
+        <button class="account-panel-item" onclick="onUserMenuAction('termsOfUse')">
+          <span class="icon">📄</span>شروط الاستخدام
         </button>
         <button class="account-panel-item logout-btn" onclick="handleLogout()">
           <span class="icon">🔓</span>تسجيل الخروج

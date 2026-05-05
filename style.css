@@ -1490,6 +1490,7 @@ body.light-mode #userMenuPanel .theme-toggle-btn:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -1507,6 +1508,43 @@ body.light-mode #userMenuPanel .theme-toggle-btn:hover {
   font-weight: 700;
   text-align: left;
   word-break: break-all;
+}
+.account-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-inline-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: background 0.2s ease;
+}
+.account-inline-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.account-inline-save {
+  border-color: rgba(80, 200, 120, 0.45);
+  background: rgba(80, 200, 120, 0.15);
+}
+.account-inline-input {
+  min-width: 115px;
+  max-width: 150px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 12px;
+  outline: none;
 }
 
 #searchWrap {
