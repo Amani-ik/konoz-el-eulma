@@ -2251,6 +2251,102 @@ function toggleUserMenu() {
   }
 }
 
+function _getUserSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userSettings") || "{}");
+    return {
+      notificationsEnabled: parsed.notificationsEnabled !== false,
+      weatherEffectsEnabled: parsed.weatherEffectsEnabled !== false,
+    };
+  } catch (error) {
+    return { notificationsEnabled: true, weatherEffectsEnabled: true };
+  }
+}
+
+function _saveUserSettings(next) {
+  localStorage.setItem("userSettings", JSON.stringify(next));
+}
+
+function _setUserMenuOpenState(isOpen) {
+  const panel = document.getElementById("userMenuPanel");
+  const backdrop = document.getElementById("userMenuBackdrop");
+  if (!panel || !backdrop) return;
+  panel.classList.toggle("open", isOpen);
+  backdrop.classList.toggle("open", isOpen);
+  panel.setAttribute("aria-hidden", String(!isOpen));
+}
+
+function _refreshSettingsButtons() {
+  const settings = _getUserSettings();
+  const notificationsBtn = document.getElementById("notificationsToggleBtn");
+  const weatherBtn = document.getElementById("weatherToggleBtn");
+  const notificationsSwitch = document.getElementById("notificationsSwitch");
+  const weatherSwitch = document.getElementById("weatherSwitch");
+  if (notificationsBtn) {
+    notificationsBtn.setAttribute(
+      "aria-pressed",
+      String(settings.notificationsEnabled),
+    );
+  }
+  if (weatherBtn) {
+    weatherBtn.setAttribute(
+      "aria-pressed",
+      String(settings.weatherEffectsEnabled),
+    );
+  }
+  if (notificationsSwitch) {
+    notificationsSwitch.classList.toggle("is-on", settings.notificationsEnabled);
+    notificationsSwitch.setAttribute(
+      "aria-checked",
+      String(settings.notificationsEnabled),
+    );
+  }
+  if (weatherSwitch) {
+    weatherSwitch.classList.toggle("is-on", settings.weatherEffectsEnabled);
+    weatherSwitch.setAttribute(
+      "aria-checked",
+      String(settings.weatherEffectsEnabled),
+    );
+  }
+}
+
+function toggleNotificationsSetting() {
+  const current = _getUserSettings();
+  const next = {
+    ...current,
+    notificationsEnabled: !current.notificationsEnabled,
+  };
+  _saveUserSettings(next);
+  _refreshSettingsButtons();
+  _updateUnreadDots();
+  alert(next.notificationsEnabled ? "تم تشغيل الإشعارات." : "تم إيقاف الإشعارات.");
+}
+
+function toggleWeatherEffectsSetting() {
+  const current = _getUserSettings();
+  const next = {
+    ...current,
+    weatherEffectsEnabled: !current.weatherEffectsEnabled,
+  };
+  _saveUserSettings(next);
+  _refreshSettingsButtons();
+  if (!next.weatherEffectsEnabled) {
+    applyWeatherFX(-1);
+  } else if (_lastWeatherCode !== null) {
+    applyWeatherFX(_lastWeatherCode);
+  }
+  alert(
+    next.weatherEffectsEnabled
+      ? "تم تشغيل تأثيرات الطقس."
+      : "تم إيقاف تأثيرات الطقس.",
+  );
+}
+
+function backToUserMenu() {
+  closeAccountPanel();
+  _setUserMenuOpenState(true);
+}
+
 const DEFAULT_PROFILE_PHOTO =
   "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2080%2080%27%3E%3Ccircle%20cx%3D%2740%27%20cy%3D%2740%27%20r%3D%2740%27%20fill%3D%27%23212831%27/%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2754%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%20font-size%3D%2740%27%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E";
 
@@ -2426,6 +2522,7 @@ async function openAccountProfile() {
     photoURL: accountData.photoURL || DEFAULT_PROFILE_PHOTO,
   });
 
+  _refreshSettingsButtons();
   // Show account panel
   showAccountPanel();
 }
@@ -2777,10 +2874,19 @@ function handleLogout() {
 }
 
 function onUserMenuAction(action) {
-  toggleUserMenu();
+  const menuPanel = document.getElementById("userMenuPanel");
+  if (menuPanel && menuPanel.classList.contains("open")) {
+    _setUserMenuOpenState(false);
+  }
   switch (action) {
     case "account":
       openAccountProfile().catch(console.error);
+      break;
+    case "notifications":
+      toggleNotificationsSetting();
+      break;
+    case "weather":
+      toggleWeatherEffectsSetting();
       break;
     case "logout":
       if (typeof doLogout === "function") {
@@ -3306,6 +3412,7 @@ const _WMO_EMOJI = {
   99: "⛈️",
 };
 let _weatherFetched = false;
+let _lastWeatherCode = null;
 
 async function fetchWeather() {
   if (_weatherFetched) return;
@@ -3321,6 +3428,7 @@ async function fetchWeather() {
     const data = await res.json();
     const temp = Math.round(data.current.temperature_2m);
     const code = data.current.weathercode;
+    _lastWeatherCode = code;
     const emoji = _WMO_EMOJI[code] || "🌡️";
     el.innerHTML =
       '<span class="w-emoji">' +
@@ -3389,6 +3497,16 @@ function _hasUnread(source) {
   return source.some((n) => !seen.has(n.id));
 }
 function _updateUnreadDots() {
+  const settings = _getUserSettings();
+  if (!settings.notificationsEnabled) {
+    const btn = document.getElementById("newsToggleBtn");
+    const tabM = document.getElementById("newsTabMarket");
+    const tabS = document.getElementById("newsTabSys");
+    if (btn) btn.classList.remove("has-unread");
+    if (tabM) tabM.classList.remove("has-unread");
+    if (tabS) tabS.classList.remove("has-unread");
+    return;
+  }
   const anyM = _hasUnread(NEWS_DATA);
   const anyS = _hasUnread(SYSTEM_DATA);
   const btn = document.getElementById("newsToggleBtn");
@@ -3803,6 +3921,14 @@ function goToNewsMarket(newsId) {
   }
 
   window.applyWeatherFX = function (code) {
+    const settings = _getUserSettings();
+    if (!settings.weatherEffectsEnabled) {
+      WX.type = "none";
+      WX.particles = [];
+      WX.ctx.clearRect(0, 0, WX.W, WX.H);
+      _applyClasses("none");
+      return;
+    }
     const type = _codeToFx(code);
     if (WX.type === type) return;
     WX.type = type;
@@ -3825,6 +3951,8 @@ function goToNewsMarket(newsId) {
     _resize();
     window.addEventListener("resize", _resize);
     _loop();
+    _refreshSettingsButtons();
+    _updateUnreadDots();
   });
 })();
 
@@ -3954,6 +4082,7 @@ loadReviews();
   window.editProfile = editProfile;
   window.changePassword = changePassword;
   window.handleLogout = handleLogout;
+  window.backToUserMenu = backToUserMenu;
 
   // reviews
   async function loadReviews() {

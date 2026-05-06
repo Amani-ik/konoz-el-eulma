@@ -381,15 +381,23 @@
         <button class="account-panel-item" onclick="changePassword()">
           <span class="icon">🔒</span>تغيير كلمة المرور
         </button>
-        <button class="account-panel-item" onclick="closeAccountPanel(); toggleUserMenu()">
+        <button class="account-panel-item" onclick="backToUserMenu()">
           <span class="icon">⬅️</span>العودة للقائمة
         </button>
         <div class="account-panel-section">الإعدادات</div>
-        <button class="account-panel-item" onclick="onUserMenuAction('notifications')">
-          <span class="icon">🔔</span>الإشعارات
+        <button class="account-panel-item setting-toggle-item" id="notificationsToggleBtn" onclick="onUserMenuAction('notifications')">
+          <span class="icon">🔔</span>
+          <span class="setting-label">الإشعارات</span>
+          <span class="setting-switch" id="notificationsSwitch" role="switch" aria-checked="true" aria-label="تبديل الإشعارات">
+            <span class="setting-switch-knob"></span>
+          </span>
         </button>
-        <button class="account-panel-item" onclick="onUserMenuAction('weather')">
-          <span class="icon">🌦️</span>تأثيرات الطقس
+        <button class="account-panel-item setting-toggle-item" id="weatherToggleBtn" onclick="onUserMenuAction('weather')">
+          <span class="icon">🌦️</span>
+          <span class="setting-label">تأثيرات الطقس</span>
+          <span class="setting-switch" id="weatherSwitch" role="switch" aria-checked="true" aria-label="تبديل تأثيرات الطقس">
+            <span class="setting-switch-knob"></span>
+          </span>
         </button>
         <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')">
           <span class="icon">⭐</span>الموردون المفضلون
