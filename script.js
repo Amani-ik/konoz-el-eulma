@@ -1,5 +1,8 @@
 import { auth } from "./firebase-config.js";
-import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db } from "./firebase-config.js";
 import {
   doc,
@@ -295,6 +298,49 @@ async function handleLogin() {
 // جعل الدوال متاحة عالمياً للارتباط بالـ HTML
 window.handleLogin = handleLogin;
 window.validateLoginForm = validateLoginForm;
+
+async function requestPasswordResetEmail(preferredEmail = "") {
+  const email =
+    (preferredEmail || "").trim() ||
+    (document.getElementById("emailIn")?.value || "").trim() ||
+    (auth.currentUser?.email || "").trim();
+
+  if (!email) {
+    alert("يرجى إدخال بريدك الإلكتروني أولاً لإرسال رابط إعادة تعيين كلمة المرور.");
+    return;
+  }
+
+  if (!email.includes("@")) {
+    alert("يرجى إدخال بريد إلكتروني بصيغة صحيحة.");
+    return;
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    alert(`تم إرسال رابط إعادة تعيين كلمة المرور إلى: ${email}`);
+  } catch (error) {
+    console.error("Password reset error:", error.code, error.message);
+    let message = "تعذر إرسال رابط إعادة التعيين حالياً، حاول مرة أخرى.";
+    switch (error.code) {
+      case "auth/invalid-email":
+        message = "صيغة البريد الإلكتروني غير صحيحة.";
+        break;
+      case "auth/user-not-found":
+        message = "لا يوجد حساب مرتبط بهذا البريد الإلكتروني.";
+        break;
+      case "auth/too-many-requests":
+        message = "تم إرسال طلبات كثيرة، حاول لاحقاً.";
+        break;
+      case "auth/network-request-failed":
+        message = "فشل الاتصال بالإنترنت، تحقق من الشبكة وحاول مجدداً.";
+        break;
+      default:
+        message = "حدث خطأ أثناء إرسال رابط إعادة تعيين كلمة المرور.";
+    }
+    alert(message);
+  }
+}
+window.requestPasswordResetEmail = requestPasswordResetEmail;
 
 // ════════════════════════════════════════════════════════════════
 // ═══ تحديث وتهيئة جميع عناصر التطبيق ═══
@@ -2416,11 +2462,22 @@ function _getAccountFieldKey(fieldId) {
   return map[fieldId] || null;
 }
 
+function _normalizePhoneForStorage(rawPhone) {
+  if (rawPhone === null || rawPhone === undefined) return "-";
+  const text = String(rawPhone).trim();
+  if (!text || text === "-") return "-";
+  if (!/^\d+$/.test(text)) return "-";
+  const numericPhone = Number(text);
+  return Number.isSafeInteger(numericPhone) ? numericPhone : "-";
+}
+
 async function _saveAccountField(fieldId, value) {
   const dbKey = _getAccountFieldKey(fieldId);
   if (!dbKey) return;
 
   const normalizedValue = value && value.trim() ? value.trim() : "-";
+  const firestoreValue =
+    dbKey === "phone" ? _normalizePhoneForStorage(normalizedValue) : normalizedValue;
   const savedUserRaw = localStorage.getItem("savedUser");
   let savedUser = null;
   try {
@@ -2440,7 +2497,7 @@ async function _saveAccountField(fieldId, value) {
       const hudUser = document.getElementById("hudUser");
       if (hudUser) hudUser.textContent = `👤 ${normalizedValue}`;
     } else {
-      savedUser[dbKey] = normalizedValue;
+      savedUser[dbKey] = dbKey === "phone" ? firestoreValue : normalizedValue;
     }
     localStorage.setItem("savedUser", JSON.stringify(savedUser));
   }
@@ -2449,7 +2506,7 @@ async function _saveAccountField(fieldId, value) {
     try {
       await setDoc(
         doc(db, "users", savedUser.uid),
-        { [dbKey]: normalizedValue },
+        { [dbKey]: firestoreValue },
         { merge: true },
       );
     } catch (error) {
@@ -2471,6 +2528,9 @@ async function _syncUserInfoToFirestore(accountData = {}) {
   const uid = savedUser?.uid || authUser?.uid || null;
   if (!uid) return;
 
+  const normalizedPhone = _normalizePhoneForStorage(
+    accountData.phone || savedUser?.phone,
+  );
   const payload = {
     uid,
     username:
@@ -2485,7 +2545,7 @@ async function _syncUserInfoToFirestore(accountData = {}) {
       savedUser?.fullName ||
       authUser?.displayName ||
       "-",
-    phone: accountData.phone || savedUser?.phone || "-",
+    phone: normalizedPhone,
     location: accountData.location || savedUser?.location || "-",
     role: accountData.role || savedUser?.role || "client",
     photoURL:
@@ -2686,7 +2746,25 @@ async function editProfile() {
 }
 
 function changePassword() {
-  alert("ميزة تغيير كلمة المرور قيد التطوير");
+  const accountEmail = (document.getElementById("accountEmail")?.textContent || "")
+    .trim()
+    .replace(/\s+/g, "");
+  const emailFromStorage = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("savedUser") || "{}");
+      return (saved?.email || "").trim();
+    } catch (error) {
+      return "";
+    }
+  })();
+
+  const targetEmail =
+    (accountEmail && accountEmail !== "-" ? accountEmail : "") ||
+    emailFromStorage ||
+    auth.currentUser?.email ||
+    "";
+
+  requestPasswordResetEmail(targetEmail);
 }
 
 function handleLogout() {
