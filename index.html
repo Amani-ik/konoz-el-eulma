@@ -188,7 +188,7 @@
               <div class="mc-sub" id="mcSub">Description</div>
             </div>
           </div>
-          <button class="mc-view-btn" id="mcViewBtn" onclick="openProfile().catch(console.error)">
+          <button class="mc-view-btn" id="mcViewBtn" type="button">
             عرض الملف الشخصي
           </button>
         </div>
@@ -234,6 +234,17 @@
       </div>
     </div>
 
+    <!-- ═══ FULL PROFILE ═══ -->
+    <div class="screen hidden" id="profileScreen">
+      <div class="prof-scroll" id="profScroll">
+        <div class="prof-hero">
+          <img class="prof-hero-img" id="profHeroImg" alt="" />
+          <div class="prof-hero-overlay"></div>
+          <button class="prof-back" onclick="closeProfile()">←</button>
+          <div class="prof-hero-title" id="profHeroTitle">Market Name</div>
+        </div>
+        <div class="prof-content" id="profContent"></div>
+      </div>
     </div>
 
     <!-- zoom fx -->
@@ -306,8 +317,8 @@
       <div class="user-menu-body">
         <div class="user-menu-section">خيارات</div>
         <button class="user-menu-item" onclick="onUserMenuAction('account')"><span class="icon">👤</span>عرض الحساب</button>
+        <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')"><span class="icon">⭐</span>الموردون المفضلون </button>  
         <button class="user-menu-item" onclick="onUserMenuAction('logout')"><span class="icon">🔓</span>تسجيل الخروج</button>
-        <button class="user-menu-item" onclick="onUserMenuAction('upgrade')"><span class="icon">🚀</span>ترقية إلى برو</button>
         <div class="user-menu-section">قوائم قريبة</div>
         <button class="user-menu-item" onclick="onUserMenuAction('restaurants')"><span class="icon">🍽️</span>مطاعم قريبة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('hotels')"><span class="icon">🏨</span>فنادق قريبة</button>
@@ -399,9 +410,7 @@
             <span class="setting-switch-knob"></span>
           </span>
         </button>
-        <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')">
-          <span class="icon">⭐</span>الموردون المفضلون
-        </button>
+        <button class="user-menu-item" onclick="onUserMenuAction('upgrade')"><span class="icon">🚀</span>ترقية إلى برو</button>
         <button class="account-panel-item" onclick="onUserMenuAction('privacyPolicy')">
           <span class="icon">🛡️</span>سياسة الخصوصية
         </button>

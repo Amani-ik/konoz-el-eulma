@@ -30,7 +30,7 @@ async function createNewUserDocument(
   userId,
   name,
   userEmail,
-  userRole = "client",
+  userRole = "عميل",
 ) {
   try {
     const userDocRef = doc(db, "users", userId);
@@ -261,7 +261,7 @@ async function handleLogin() {
 
     let errorMessage = "حدث خطأ غير متوقع أثناء تسجيل الدخول.";
 
-    // معالجة أخطاء Firebase بالفصحى
+    // معالجة أخطاء Firebase
     switch (error.code) {
       case "auth/invalid-email":
         errorMessage = "صيغة البريد الإلكتروني المدخل غير صحيحة.";
@@ -306,7 +306,9 @@ async function requestPasswordResetEmail(preferredEmail = "") {
     (auth.currentUser?.email || "").trim();
 
   if (!email) {
-    alert("يرجى إدخال بريدك الإلكتروني أولاً لإرسال رابط إعادة تعيين كلمة المرور.");
+    alert(
+      "يرجى إدخال بريدك الإلكتروني أولاً لإرسال رابط إعادة تعيين كلمة المرور.",
+    );
     return;
   }
 
@@ -462,7 +464,7 @@ const DISTRICTS = [
     id: "kitchen",
     name: "سوق الجملة للأدوات والأواني المنزلية",
     emoji: "🍶",
-    accent: "#16a085",
+    accent: "#35d9b8",
     px: 92,
     py: 35,
     pins: [
@@ -557,7 +559,7 @@ const DISTRICTS = [
     id: "Electricity",
     name: "سوق الجملة للمستلزمات الكهربائية",
     emoji: "⚡",
-    accent: "#f39c12",
+    accent: "#efd021",
     px: 75,
     py: 65,
     pins: [
@@ -853,7 +855,7 @@ function doLogin() {
 
 function toggleRegister() {
   const phone = "213699173103";
-  const text = encodeURIComponent("أريد التسجيل في كنوز العلمة");
+  const text = encodeURIComponent("أريد التسجيل في تطبيق كنوز العلمة");
   const url = `https://wa.me/${phone}?text=${text}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
@@ -867,6 +869,9 @@ function doLogout() {
   localStorage.removeItem("lastDistIdx");
   localStorage.removeItem("lastMarketId");
   localStorage.removeItem("lastMiniCardOpen");
+
+  sessionStorage.setItem("logoutReloadOnce", "1");
+  window.location.reload();
 
   const hudUser = document.getElementById("hudUser");
   if (hudUser) {
@@ -1247,7 +1252,7 @@ function selectPin(pin, mkt, d) {
     .forEach((p) => p.classList.remove("selected"));
   pin.classList.add("selected");
   S.activeMkt = mkt;
-
+  S.activeD = d;
   // Always sync the accent CSS variable so selected pin colors are correct
   const accent = d.accent || "#e67e22";
   document.documentElement.style.setProperty("--accent", accent);
@@ -2030,6 +2035,13 @@ function toSc(f, t) {
     csBtn.style.display = "flex";
   }
 }
+
+{
+  const mcViewBtn = document.getElementById("mcViewBtn");
+  if (mcViewBtn) {
+    mcViewBtn.addEventListener("click", () => openProfile().catch(console.error));
+  }
+}
 function flash() {
   const z = document.getElementById("zfx");
   z.innerHTML = '<div class="zwhite"></div>';
@@ -2295,7 +2307,10 @@ function _refreshSettingsButtons() {
     );
   }
   if (notificationsSwitch) {
-    notificationsSwitch.classList.toggle("is-on", settings.notificationsEnabled);
+    notificationsSwitch.classList.toggle(
+      "is-on",
+      settings.notificationsEnabled,
+    );
     notificationsSwitch.setAttribute(
       "aria-checked",
       String(settings.notificationsEnabled),
@@ -2319,7 +2334,9 @@ function toggleNotificationsSetting() {
   _saveUserSettings(next);
   _refreshSettingsButtons();
   _updateUnreadDots();
-  alert(next.notificationsEnabled ? "تم تشغيل الإشعارات." : "تم إيقاف الإشعارات.");
+  alert(
+    next.notificationsEnabled ? "تم تشغيل الإشعارات." : "تم إيقاف الإشعارات.",
+  );
 }
 
 function toggleWeatherEffectsSetting() {
@@ -2391,7 +2408,9 @@ async function openAccountProfile() {
           fullName:
             firestoreUserData.fullName || firestoreUserData["full name"] || "",
           created_at:
-            firestoreUserData.created_at || firestoreUserData["created at"] || null,
+            firestoreUserData.created_at ||
+            firestoreUserData["created at"] ||
+            null,
         };
       }
     } catch (error) {
@@ -2486,7 +2505,8 @@ async function openAccountProfile() {
     ((uid && authUser.uid === uid) ||
       (accountData.email &&
         authUser.email &&
-        authUser.email.toLowerCase() === String(accountData.email).toLowerCase()));
+        authUser.email.toLowerCase() ===
+          String(accountData.email).toLowerCase()));
 
   if (authMatchesAccount && authUser.metadata?.creationTime) {
     registrationDate = new Date(authUser.metadata.creationTime);
@@ -2518,7 +2538,7 @@ async function openAccountProfile() {
     fullName: accountData.fullName || "-",
     phone: accountData.phone || "-",
     location: accountData.location || "-",
-    role: accountData.role || "client",
+    role: accountData.role || "عميل",
     photoURL: accountData.photoURL || DEFAULT_PROFILE_PHOTO,
   });
 
@@ -2574,13 +2594,18 @@ async function _saveAccountField(fieldId, value) {
 
   const normalizedValue = value && value.trim() ? value.trim() : "-";
   const firestoreValue =
-    dbKey === "phone" ? _normalizePhoneForStorage(normalizedValue) : normalizedValue;
+    dbKey === "phone"
+      ? _normalizePhoneForStorage(normalizedValue)
+      : normalizedValue;
   const savedUserRaw = localStorage.getItem("savedUser");
   let savedUser = null;
   try {
     savedUser = savedUserRaw ? JSON.parse(savedUserRaw) : null;
   } catch (error) {
-    console.warn("Failed to parse savedUser while saving profile field:", error);
+    console.warn(
+      "Failed to parse savedUser while saving profile field:",
+      error,
+    );
   }
 
   if (savedUser) {
@@ -2733,11 +2758,7 @@ function _setEditProfileButtonLabel(isEditing) {
 }
 
 async function editProfile() {
-  const editableFieldIds = [
-    "accountName",
-    "accountFullName",
-    "accountPhone",
-  ];
+  const editableFieldIds = ["accountName", "accountFullName", "accountPhone"];
 
   const hasEditActions = editableFieldIds.some((fieldId) => {
     const valueEl = document.getElementById(fieldId);
@@ -2843,7 +2864,9 @@ async function editProfile() {
 }
 
 function changePassword() {
-  const accountEmail = (document.getElementById("accountEmail")?.textContent || "")
+  const accountEmail = (
+    document.getElementById("accountEmail")?.textContent || ""
+  )
     .trim()
     .replace(/\s+/g, "");
   const emailFromStorage = (() => {
@@ -4021,6 +4044,7 @@ loadReviews();
   window.toSc = toSc;
   window.goWorldBack = goWorldBack;
   window.enterDistrict = enterDistrict;
+  window.openProfile = openProfile;
   window.openAccountProfile = openAccountProfile;
   window.closeProfile = closeProfile;
 
@@ -4095,3 +4119,4 @@ loadReviews();
   // نعيطو للدالة باش تخدم
   loadReviews();
 })();
+
