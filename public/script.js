@@ -2926,6 +2926,9 @@ function onUserMenuAction(action) {
     case "privacyPolicy":
       window.location.href = "Privacy.html";
       break;
+    case "termsOfUse":
+      window.location.href = "Terms.html";
+      break;
     default:
       console.log("User menu action:", action);
   }
