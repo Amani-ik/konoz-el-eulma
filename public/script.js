@@ -2929,6 +2929,9 @@ function onUserMenuAction(action) {
     case "termsOfUse":
       window.location.href = "Terms.html";
       break;
+    case "faq":
+      window.location.href = "FAQ.html";
+      break;
     default:
       console.log("User menu action:", action);
   }
