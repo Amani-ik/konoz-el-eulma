@@ -801,6 +801,41 @@ body {
   margin-bottom: 14px;
 }
 
+/* Favorite Heart Button */
+.favorite-heart-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #ddd;
+  border-radius: 50%;
+  width: 54px;
+  height: 54px;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.favorite-heart-btn:hover {
+  transform: scale(1.1);
+  background: white;
+  border-color: #ff4444;
+  box-shadow: 0 6px 16px rgba(255, 68, 68, 0.2);
+}
+
+.favorite-heart-btn.favorited {
+  background: #ffebee;
+  border-color: #ff4444;
+}
+
+.favorite-heart-btn:active {
+  transform: scale(0.95);
+}
+
 /* CTA buttons - full width */
 .cta-call {
   width: 100%;

@@ -1084,7 +1084,7 @@ wC.addEventListener("touchend", (e) => {
 });
 
 /* ══ ENTER DISTRICT ══ */
-function enterDistrict(d, evt) {
+function enterDistrict(d, evt, onReady) {
   S.activeD = d;
   const distIdx = DISTRICTS.indexOf(d);
   localStorage.setItem("lastDistIdx", distIdx);
@@ -1094,7 +1094,7 @@ function enterDistrict(d, evt) {
     flash();
     setTimeout(() => {
       toSc("worldScreen", "districtScreen");
-      setupDistrict(d);
+      setupDistrict(d, onReady);
 
       const dInner = document.getElementById("dInner");
       if (dInner) {
@@ -1513,9 +1513,19 @@ async function openProfile() {
     )
     .join("");
 
+  const isFavorited = _isFavorite(marketKey);
+
   document.getElementById("profContent").innerHTML = `
           <div class="prof-card">
-            <div class="owner-section">
+            <div class="owner-section" style="position: relative;">
+              <button 
+                id="favoriteHeartBtn" 
+                type="button"
+                class="favorite-heart-btn ${isFavorited ? "favorited" : ""}"
+                title="${isFavorited ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}"
+              >
+                ${isFavorited ? "❤️" : "🤍"}
+              </button>
               <div class="owner-av">${d.emoji}</div>
               <div class="owner-nm">${m.owner}</div>
               <div class="owner-sb">${m.sub}</div>
@@ -1585,6 +1595,16 @@ async function openProfile() {
             </div>
           </div>
         `;
+  const heartBtn = document.getElementById("favoriteHeartBtn");
+  if (heartBtn) {
+    heartBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const nowFavorited = _toggleFavorite(marketKey, m.name, d.id, d.emoji);
+      heartBtn.textContent = nowFavorited ? "❤️" : "🤍";
+      heartBtn.title = nowFavorited ? "إزالة من المفضلة" : "إضافة إلى المفضلة";
+      heartBtn.classList.toggle("favorited", nowFavorited);
+    });
+  }
   document.getElementById("profScroll").scrollTop = 0;
   toSc("districtScreen", "profileScreen");
 
@@ -2013,6 +2033,225 @@ function updateProfileMap(vendor) {
 }
 function closeProfile() {
   toSc("profileScreen", "districtScreen");
+}
+
+/* ══ FAVORITES MANAGEMENT ══ */
+const FAVORITES_STORE_KEY = "userFavorites";
+
+function _loadFavorites() {
+  return _safeJsonParse(localStorage.getItem(FAVORITES_STORE_KEY), {});
+}
+
+function _saveFavorites(favorites) {
+  localStorage.setItem(FAVORITES_STORE_KEY, JSON.stringify(favorites));
+}
+
+function _isFavorite(marketKey) {
+  const favorites = _loadFavorites();
+  return !!favorites[marketKey];
+}
+
+function _toggleFavorite(marketKey, marketName, districtId, districtEmoji) {
+  const favorites = _loadFavorites();
+  const isCurrentlyFavorited = !!favorites[marketKey];
+  if (isCurrentlyFavorited) {
+    delete favorites[marketKey];
+  } else {
+    favorites[marketKey] = {
+      name: marketName,
+      districtId: districtId,
+      districtEmoji: districtEmoji,
+      addedAt: new Date().toISOString(),
+    };
+  }
+  _saveFavorites(favorites);
+  return !isCurrentlyFavorited; // Return true if now favorited (for UI update)
+}
+
+function showFavoriteSuppliers() {
+  const favorites = _loadFavorites();
+  const favoriteList = Object.entries(favorites);
+
+  if (favoriteList.length === 0) {
+    alert(
+      "لا توجد موردين مفضلين بعد. أضف متاجر مفضلة بالنقر على أيقونة القلب في ملفهم الشخصي.",
+    );
+    return;
+  }
+
+  // Create a modal panel to show favorites
+  const panel = document.createElement("div");
+  panel.id = "favoritesPanel";
+  panel.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: flex-end;
+    z-index: 10000;
+    direction: rtl;
+  `;
+
+  const panelContent = document.createElement("div");
+  panelContent.style.cssText = `
+    background: white;
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+  `;
+
+  const header = document.createElement("div");
+  header.style.cssText =
+    "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;";
+  header.innerHTML = `
+    <h2 style="margin: 0; font-size: 20px; font-weight: 800;">⭐ الموردون المفضلون</h2>
+  `;
+  const closeButton = document.createElement("button");
+  closeButton.textContent = "✕";
+  closeButton.style.cssText =
+    "background: none; border: none; font-size: 24px; cursor: pointer;";
+  closeButton.addEventListener("click", () => panel.remove());
+  header.appendChild(closeButton);
+  panelContent.appendChild(header);
+
+  const listContainer = document.createElement("div");
+  listContainer.style.cssText =
+    "display: flex; flex-direction: column; gap: 10px;";
+
+  favoriteList.forEach(([marketKey, favorite]) => {
+    const item = document.createElement("div");
+    item.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: #f9f9f9;
+      cursor: pointer;
+    `;
+    item.addEventListener("click", () => openFavoriteMarket(marketKey));
+
+    const info = document.createElement("div");
+    info.style.flex = "1";
+    info.innerHTML = `
+      <div style="font-weight: 800; font-size: 14px;">${favorite.districtEmoji} ${favorite.name}</div>
+      <div style="font-size: 12px; color: #999; margin-top: 4px;">أضيف في ${new Date(favorite.addedAt).toLocaleDateString("ar")}</div>
+    `;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "حذف";
+    removeBtn.style.cssText = `
+      background: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+    `;
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeFavoriteFromPanel(marketKey);
+    });
+
+    item.appendChild(info);
+    item.appendChild(removeBtn);
+    listContainer.appendChild(item);
+  });
+
+  panelContent.appendChild(listContainer);
+  panel.appendChild(panelContent);
+  document.body.appendChild(panel);
+
+  panel.addEventListener("click", (e) => {
+    if (e.target === panel) {
+      panel.remove();
+    }
+  });
+}
+
+function removeFavoriteFromPanel(marketKey) {
+  const favorites = _loadFavorites();
+  delete favorites[marketKey];
+  _saveFavorites(favorites);
+  const panel = document.getElementById("favoritesPanel");
+  if (panel) {
+    panel.remove();
+  }
+  showFavoriteSuppliers();
+}
+
+function openFavoriteMarket(marketKey) {
+  const favorites = _loadFavorites();
+  const favorite = favorites[marketKey];
+  if (!favorite) return;
+
+  const [districtId, marketIndex] = marketKey.split(":");
+  const district = DISTRICTS.find((d) => d.id === districtId);
+  if (!district) {
+    alert("لا يمكن فتح السوق المفضل: المنطقة غير موجودة.");
+    return;
+  }
+
+  const markets = MARKETS[district.id] || [];
+  const mktIdx = Number(marketIndex);
+  const market = markets[mktIdx];
+  if (!market) {
+    alert("لا يمكن فتح السوق المفضل: السوق غير موجود.");
+    return;
+  }
+
+  const panel = document.getElementById("favoritesPanel");
+  if (panel) panel.remove();
+
+  const selectFavoritePin = () => {
+    const pin = Array.from(document.querySelectorAll(".mpin")).find(
+      (p) => p.dataset.mktIdx === String(mktIdx),
+    );
+    if (pin) {
+      selectPin(pin, market, district);
+    }
+  };
+
+  const districtScreen = document.getElementById("districtScreen");
+  const isDistrictVisible =
+    districtScreen && !districtScreen.classList.contains("hidden");
+
+  if (!S.activeD || S.activeD.id !== district.id || !isDistrictVisible) {
+    enterDistrict(district, null, selectFavoritePin);
+    return;
+  }
+
+  selectFavoritePin();
+}
+
+function toggleMarketFavorite(
+  marketKey,
+  marketName,
+  districtId,
+  districtEmoji,
+) {
+  const isFavorited = _toggleFavorite(
+    marketKey,
+    marketName,
+    districtId,
+    districtEmoji,
+  );
+  const btn = document.getElementById("favoriteHeartBtn");
+  if (btn) {
+    btn.textContent = isFavorited ? "❤️" : "🤍";
+    btn.title = isFavorited ? "إزالة من المفضلة" : "إضافة إلى المفضلة";
+    // Add animation
+    btn.classList.toggle("favorited", isFavorited);
+  }
 }
 
 /* ══ NAV ══ */
@@ -2931,6 +3170,9 @@ function onUserMenuAction(action) {
       break;
     case "faq":
       window.location.href = "FAQ.html";
+      break;
+    case "favoriteSuppliers":
+      showFavoriteSuppliers();
       break;
     default:
       console.log("User menu action:", action);
@@ -4087,6 +4329,11 @@ loadReviews();
   // User Menu
   window.toggleUserMenu = toggleUserMenu;
   window.onUserMenuAction = onUserMenuAction;
+
+  // Favorites
+  window.showFavoriteSuppliers = showFavoriteSuppliers;
+  window.toggleMarketFavorite = toggleMarketFavorite;
+  window.removeFavoriteFromPanel = removeFavoriteFromPanel;
 
   // Theme
   window.toggleTheme = toggleTheme;
