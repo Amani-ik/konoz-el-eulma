@@ -7,6 +7,7 @@ import { db } from "./firebase-config.js";
 import {
   doc,
   setDoc,
+  deleteDoc,
   collection,
   getDocs,
   getDoc,
@@ -105,7 +106,7 @@ let passwordInput;
 let loginBtn;
 
 // تهيئة عناصر النموذج عند تحميل الصفحة
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   // تهيئة الهيكل العظمي أولاً
   initializeSkeleton();
 
@@ -126,6 +127,9 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     console.error("✗ فشل في العثور على عناصر نموذج تسجيل الدخول");
   }
+
+  // Sync favorites from Firestore for authenticated users
+  await _syncFavoritesFromFirestore();
 });
 
 // التحقق من الحقول لتفعيل أو تعطيل الزر
@@ -864,6 +868,7 @@ function doLogout() {
   S.user = "";
   localStorage.removeItem("savedUser");
   localStorage.removeItem("lastScreen");
+  localStorage.removeItem(FAVORITES_STORE_KEY);
 
   // حذف أي ذاكرة district/profile
   localStorage.removeItem("lastDistIdx");
@@ -2037,6 +2042,20 @@ function closeProfile() {
 
 /* ══ FAVORITES MANAGEMENT ══ */
 const FAVORITES_STORE_KEY = "userFavorites";
+const FAVORITES_COLLECTION_NAME = "Favorites";
+
+function _getSavedUser() {
+  const savedUserRaw = localStorage.getItem("savedUser");
+  return _safeJsonParse(savedUserRaw, null);
+}
+
+function _getUserDocPath() {
+  const savedUser = _getSavedUser();
+  if (!savedUser) return null;
+  if (savedUser.uid) return `/users/${savedUser.uid}`;
+  if (savedUser.email) return `/users/${savedUser.email}`;
+  return null;
+}
 
 function _loadFavorites() {
   return _safeJsonParse(localStorage.getItem(FAVORITES_STORE_KEY), {});
@@ -2044,6 +2063,80 @@ function _loadFavorites() {
 
 function _saveFavorites(favorites) {
   localStorage.setItem(FAVORITES_STORE_KEY, JSON.stringify(favorites));
+}
+
+async function _syncFavoritesFromFirestore() {
+  const userPath = _getUserDocPath();
+  if (!userPath) return;
+
+  try {
+    const favoriteQuery = query(
+      collection(db, FAVORITES_COLLECTION_NAME),
+      where("usersId", "==", userPath),
+    );
+    const snapshot = await getDocs(favoriteQuery);
+    const favorites = {};
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data && data.marketKey) {
+        favorites[data.marketKey] = {
+          name: data.marketName || data.marketKey,
+          districtId: data.districtId || "",
+          districtEmoji: data.districtEmoji || "",
+          addedAt: data.createdAt
+            ? data.createdAt.toDate().toISOString()
+            : new Date().toISOString(),
+        };
+      }
+    });
+    _saveFavorites(favorites);
+  } catch (error) {
+    console.warn(
+      "فشل مزامنة المفضلات من Firebase، سيتم استخدام البيانات المحلية:",
+      error,
+    );
+  }
+}
+
+async function _persistFavoriteToFirestore(
+  marketKey,
+  marketName,
+  districtId,
+  districtEmoji,
+) {
+  const userPath = _getUserDocPath();
+  if (!userPath) return;
+
+  const savedUser = _getSavedUser();
+  const userId = savedUser?.uid || savedUser?.email;
+  if (!userId) return;
+
+  const favoriteDocId = `${userId}_${marketKey}`;
+  try {
+    await setDoc(doc(db, FAVORITES_COLLECTION_NAME, favoriteDocId), {
+      districtEmoji,
+      districtId,
+      marketKey,
+      marketName,
+      usersId: userPath,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("فشل حفظ المفضلة إلى Firebase:", error);
+  }
+}
+
+async function _removeFavoriteFromFirestore(marketKey) {
+  const savedUser = _getSavedUser();
+  const userId = savedUser?.uid || savedUser?.email;
+  if (!userId) return;
+
+  const favoriteDocId = `${userId}_${marketKey}`;
+  try {
+    await deleteDoc(doc(db, FAVORITES_COLLECTION_NAME, favoriteDocId));
+  } catch (error) {
+    console.error("فشل حذف المفضلة من Firebase:", error);
+  }
 }
 
 function _isFavorite(marketKey) {
@@ -2056,6 +2149,7 @@ function _toggleFavorite(marketKey, marketName, districtId, districtEmoji) {
   const isCurrentlyFavorited = !!favorites[marketKey];
   if (isCurrentlyFavorited) {
     delete favorites[marketKey];
+    _removeFavoriteFromFirestore(marketKey);
   } else {
     favorites[marketKey] = {
       name: marketName,
@@ -2063,6 +2157,12 @@ function _toggleFavorite(marketKey, marketName, districtId, districtEmoji) {
       districtEmoji: districtEmoji,
       addedAt: new Date().toISOString(),
     };
+    _persistFavoriteToFirestore(
+      marketKey,
+      marketName,
+      districtId,
+      districtEmoji,
+    );
   }
   _saveFavorites(favorites);
   return !isCurrentlyFavorited; // Return true if now favorited (for UI update)
