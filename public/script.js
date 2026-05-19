@@ -2,6 +2,7 @@ import { auth } from "./firebase-config.js";
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db } from "./firebase-config.js";
 import {
@@ -868,7 +869,6 @@ function doLogout() {
   S.user = "";
   localStorage.removeItem("savedUser");
   localStorage.removeItem("lastScreen");
-  localStorage.removeItem(FAVORITES_STORE_KEY);
 
   // حذف أي ذاكرة district/profile
   localStorage.removeItem("lastDistIdx");
@@ -2041,40 +2041,63 @@ function closeProfile() {
 }
 
 /* ══ FAVORITES MANAGEMENT ══ */
-const FAVORITES_STORE_KEY = "userFavorites";
-const FAVORITES_COLLECTION_NAME = "Favorites";
+const FAVORITES_CACHE = {};
+const FAVORITES_COLLECTION_NAME = "favorites";
 
 function _getSavedUser() {
   const savedUserRaw = localStorage.getItem("savedUser");
-  return _safeJsonParse(savedUserRaw, null);
+  const stored = _safeJsonParse(savedUserRaw, null);
+  // Prefer the authenticated Firebase user when available
+  try {
+    if (auth && auth.currentUser) {
+      const u = auth.currentUser;
+      return {
+        uid: u.uid,
+        email: u.email || stored?.email,
+        displayName: u.displayName || stored?.displayName || stored?.username,
+      };
+    }
+  } catch (e) {
+    // ignore
+  }
+  return stored;
 }
 
 function _getUserDocPath() {
   const savedUser = _getSavedUser();
   if (!savedUser) return null;
-  if (savedUser.uid) return `/users/${savedUser.uid}`;
-  if (savedUser.email) return `/users/${savedUser.email}`;
-  return null;
+  const id = savedUser.uid || savedUser.email || null;
+  if (!id) return null;
+  // Normalize to the format used in Firestore documents (leading slash)
+  return `/users/${id}`;
+}
+
+function _getUserId() {
+  const savedUser = _getSavedUser();
+  return savedUser?.uid || savedUser?.email || null;
 }
 
 function _loadFavorites() {
-  return _safeJsonParse(localStorage.getItem(FAVORITES_STORE_KEY), {});
+  return { ...FAVORITES_CACHE };
 }
 
 function _saveFavorites(favorites) {
-  localStorage.setItem(FAVORITES_STORE_KEY, JSON.stringify(favorites));
+  Object.keys(FAVORITES_CACHE).forEach((key) => delete FAVORITES_CACHE[key]);
+  Object.assign(FAVORITES_CACHE, favorites);
 }
 
-async function _syncFavoritesFromFirestore() {
-  const userPath = _getUserDocPath();
-  if (!userPath) return;
+async function _syncFavoritesFromFirestore(userIdOverride = null) {
+  const userId = userIdOverride || _getUserId();
+  if (!userId) return;
 
   try {
+    console.log("_syncFavoritesFromFirestore: userId=", userId);
     const favoriteQuery = query(
       collection(db, FAVORITES_COLLECTION_NAME),
-      where("usersId", "==", userPath),
+      where("userId", "==", userId),
     );
     const snapshot = await getDocs(favoriteQuery);
+    console.log("_syncFavoritesFromFirestore: snapshot.size=", snapshot.size);
     const favorites = {};
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
@@ -2104,39 +2127,60 @@ async function _persistFavoriteToFirestore(
   districtId,
   districtEmoji,
 ) {
-  const userPath = _getUserDocPath();
-  if (!userPath) return;
-
-  const savedUser = _getSavedUser();
-  const userId = savedUser?.uid || savedUser?.email;
-  if (!userId) return;
+  const userId = _getUserId();
+  if (!userId) {
+    console.warn("No user id found — cannot persist favorite to Firestore");
+    return;
+  }
 
   const favoriteDocId = `${userId}_${marketKey}`;
+  const payload = {
+    districtEmoji,
+    districtId,
+    marketKey,
+    marketName,
+    // match your security rules: use `userId` (uid) field
+    userId,
+    createdAt: serverTimestamp(),
+  };
+
   try {
-    await setDoc(doc(db, FAVORITES_COLLECTION_NAME, favoriteDocId), {
-      districtEmoji,
-      districtId,
-      marketKey,
-      marketName,
-      usersId: userPath,
-      createdAt: serverTimestamp(),
-    });
+    console.log("_persistFavoriteToFirestore payload:", payload);
+    await setDoc(doc(db, FAVORITES_COLLECTION_NAME, favoriteDocId), payload);
+    console.log("Favorite persisted to Firestore:", favoriteDocId, marketKey);
   } catch (error) {
-    console.error("فشل حفظ المفضلة إلى Firebase:", error);
+    console.error("فشل حفظ المفضلة إلى Firebase:", error, payload);
   }
 }
 
 async function _removeFavoriteFromFirestore(marketKey) {
-  const savedUser = _getSavedUser();
-  const userId = savedUser?.uid || savedUser?.email;
+  const userId = _getUserId();
   if (!userId) return;
 
   const favoriteDocId = `${userId}_${marketKey}`;
   try {
     await deleteDoc(doc(db, FAVORITES_COLLECTION_NAME, favoriteDocId));
+    console.log("Favorite removed from Firestore:", favoriteDocId);
   } catch (error) {
     console.error("فشل حذف المفضلة من Firebase:", error);
   }
+}
+
+// Listen for auth state changes to keep favorites in sync
+try {
+  onAuthStateChanged(auth, (user) => {
+    console.log("onAuthStateChanged ->", user && user.uid ? user.uid : user);
+    if (user) {
+      _syncFavoritesFromFirestore(user.uid).catch((e) =>
+        console.error("_syncFavoritesFromFirestore error:", e),
+      );
+    } else {
+      // Clear local favorites for logged-out users
+      _saveFavorites({});
+    }
+  });
+} catch (e) {
+  /* ignore if auth listener not available */
 }
 
 function _isFavorite(marketKey) {
@@ -2168,7 +2212,8 @@ function _toggleFavorite(marketKey, marketName, districtId, districtEmoji) {
   return !isCurrentlyFavorited; // Return true if now favorited (for UI update)
 }
 
-function showFavoriteSuppliers() {
+async function showFavoriteSuppliers() {
+  await _syncFavoritesFromFirestore();
   const favorites = _loadFavorites();
   const favoriteList = Object.entries(favorites);
 

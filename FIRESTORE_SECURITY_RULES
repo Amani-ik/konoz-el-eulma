@@ -28,6 +28,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Favorites collection
+    match /favorites/{favoriteId} {
+      // Authenticated users can read all favorites (query filters by userId on client)
+      allow read: if request.auth != null;
+      // Authenticated users can only write/delete their own favorites
+      allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+
     // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;
