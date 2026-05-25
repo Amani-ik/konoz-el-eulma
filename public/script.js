@@ -622,7 +622,6 @@ const DISTRICTS = [
       { x: 97, y: 62, mi: 14, name: "؟" },
       { x: 68, y: 50, mi: 15, name: "Snotoy’z 2" },
       { x: 51, y: 60, mi: 16, name: "Zaki Toys El Eulma" },
-      
     ],
   },
 ];
@@ -1568,17 +1567,25 @@ async function openProfile() {
 
           <div class="prof-card">
             <div class="section-title"><span class="section-diamond">◆</span> نبذة عن المتجر</div>
-            ${m.about.map((a) => `<div class="about-item"><div class="about-dot" style="background:${d.accent}"></div>${a}</div>`).join("")}
+            ${m.about.length > 0 ? m.about.map((a) => `<div class="about-item"><div class="about-dot" style="background:${d.accent}"></div>${a}</div>`).join("") : `<div style="color:#999;font-weight:600;font-size:14px;">لايوجد معلومات حاليا</div>`}
           </div>
 
+          ${
+            m.hours.some(
+              ([day, time]) => day.trim() !== "" || time.trim() !== "",
+            )
+              ? `
           <div class="prof-card">
             <div class="section-title"><span style="font-size:16px">⏱</span> أوقات العمل</div>
             ${m.hours.map(([day, time]) => `<div class="hours-row"><span class="hday">${day}</span><span class="htime">${time}</span></div>`).join("")}
           </div>
+          `
+              : ""
+          }
 
           <div class="prof-card">
             <div class="section-title"><span class="section-diamond">◆</span> معرض المنتجات</div>
-            <div class="gallery-grid" id="profGallery"></div>
+            ${m.images && m.images.length > 0 ? `<div class="gallery-grid" id="profGallery"></div>` : `<div style="color:#999;font-weight:600;font-size:14px;">لا توجد صور متاحة</div>`}
           </div>
 
           <div class="prof-card">
@@ -2517,6 +2524,7 @@ window.addEventListener("load", function () {
 
 function updateProfileGallery(market) {
   const container = document.getElementById("profGallery");
+  if (!container) return; // Exit if gallery container doesn't exist (no images)
   container.innerHTML = "";
   const imgs = market.images || [];
 
