@@ -36,6 +36,16 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
 
+    // News collection: public read-only access for app announcements
+    match /news/{newsId} {
+      allow read: if true;
+    }
+
+    // System notifications collection: public read-only access
+    match /system/{systemId} {
+      allow read: if true;
+    }
+
     // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;

@@ -12,10 +12,15 @@ import {
   collection,
   getDocs,
   getDoc,
+  onSnapshot,
   query,
   where,
+  orderBy,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+let NEWS_DATA = [];
+let SYSTEM_DATA = [];
 
 // ════════════════════════════════════════════════════════════════
 // ═══ إنشاء وثيقة المستخدم الجديد في Firestore ═══
@@ -400,6 +405,8 @@ function refreshAppUI() {
 
 // Expose refresh function globally
 window.refreshAppUI = refreshAppUI;
+window.toggleNews = toggleNews;
+window.switchNewsTab = switchNewsTab;
 
 // ════════════════════════════════════════════════════════════════
 
@@ -3339,6 +3346,17 @@ function onUserMenuAction(action) {
     case "favoriteSuppliers":
       showFavoriteSuppliers();
       break;
+    case "restaurants":
+    case "hotels":
+    case "delivery":
+    case "ubers":
+    case "pharmacies":
+    case "tutorials":
+    case "follow":
+      if (typeof openComingSoon === "function") {
+        openComingSoon();
+      }
+      break;
     default:
       console.log("User menu action:", action);
   }
@@ -3854,6 +3872,112 @@ const _WMO_EMOJI = {
 };
 let _weatherFetched = false;
 let _lastWeatherCode = null;
+let _newsDataLoadedFromFirestore = false;
+let _newsUnsub = null;
+let _systemUnsub = null;
+
+function _unsubscribeFromNews() {
+  if (_newsUnsub) {
+    try {
+      _newsUnsub();
+    } catch (e) {}
+    _newsUnsub = null;
+  }
+  if (_systemUnsub) {
+    try {
+      _systemUnsub();
+    } catch (e) {}
+    _systemUnsub = null;
+  }
+  _newsDataLoadedFromFirestore = false;
+}
+
+async function _subscribeToNews() {
+  if (_newsDataLoadedFromFirestore) return;
+  try {
+    const newsQuery = query(
+      collection(db, "news"),
+      orderBy("published", "desc"),
+    );
+    const systemQuery = query(
+      collection(db, "system"),
+      orderBy("published", "desc"),
+    );
+
+    _newsUnsub = onSnapshot(
+      newsQuery,
+      (snapshot) => {
+        const newsArray = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          // Normalize Firestore Timestamp to ISO string for published
+          if (
+            data &&
+            data.published &&
+            typeof data.published.toDate === "function"
+          ) {
+            data.published = data.published.toDate().toISOString();
+          }
+          return {
+            id: docSnap.id,
+            ...data,
+          };
+        });
+        NEWS_DATA = newsArray;
+        _updateUnreadDots();
+        if (document.getElementById("newsPanel")?.classList.contains("open"))
+          renderNews(false);
+      },
+      (err) => {
+        console.warn("news onSnapshot error:", err);
+      },
+    );
+
+    _systemUnsub = onSnapshot(
+      systemQuery,
+      (snapshot) => {
+        const systemArray = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          if (
+            data &&
+            data.published &&
+            typeof data.published.toDate === "function"
+          ) {
+            data.published = data.published.toDate().toISOString();
+          }
+          return {
+            id: docSnap.id,
+            ...data,
+          };
+        });
+        SYSTEM_DATA = systemArray;
+        _updateUnreadDots();
+        if (
+          document.getElementById("newsPanel")?.classList.contains("open") &&
+          _newsActiveTab === "system"
+        )
+          renderNews(false);
+      },
+      (err) => {
+        console.warn("system onSnapshot error:", err);
+      },
+    );
+
+    _newsDataLoadedFromFirestore = true;
+    _updateUnreadDots();
+  } catch (error) {
+    console.warn("لم يتم تحميل بيانات الأخبار من Firestore:", error);
+  }
+}
+
+async function toggleNews() {
+  const panel = document.getElementById("newsPanel");
+  const isOpen = panel.classList.toggle("open");
+  if (isOpen) {
+    await _subscribeToNews();
+    switchNewsTab(_newsActiveTab, false);
+    fetchWeather();
+  }
+}
 
 async function fetchWeather() {
   if (_weatherFetched) return;
@@ -3883,15 +4007,6 @@ async function fetchWeather() {
     if (typeof applyWeatherFX === "function") applyWeatherFX(code);
   } catch (e) {
     el.textContent = "—";
-  }
-}
-
-function toggleNews() {
-  const panel = document.getElementById("newsPanel");
-  const isOpen = panel.classList.toggle("open");
-  if (isOpen) {
-    switchNewsTab(_newsActiveTab, false);
-    fetchWeather();
   }
 }
 

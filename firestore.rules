@@ -28,6 +28,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // News collection: public read-only access for app announcements
+    match /news/{newsId} {
+      allow read: if true;
+    }
+
+    // System notifications collection: public read-only access
+    match /system/{systemId} {
+      allow read: if true;
+    }
+
     // Favorites collection
     match /favorites/{favoriteId} {
       // Authenticated users can read and write only their own favorites
