@@ -2982,6 +2982,138 @@ function closeAccountPanel() {
   }
 }
 
+/* FEEDBACK PANEL */
+function openFeedbackPanel() {
+  const backdrop = document.getElementById("feedbackBackdrop");
+  const panel = document.getElementById("feedbackPanel");
+  const ta = document.getElementById("fbPanelText");
+  if (ta) ta.value = "";
+  if (backdrop && panel) {
+    backdrop.classList.add("open");
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeFeedbackPanel() {
+  const backdrop = document.getElementById("feedbackBackdrop");
+  const panel = document.getElementById("feedbackPanel");
+  if (backdrop && panel) {
+    backdrop.classList.remove("open");
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+  }
+}
+
+function _getSavedUserEmail() {
+  try {
+    const raw = localStorage.getItem("savedUser");
+    if (!raw) return "";
+    const su = JSON.parse(raw);
+    return su && su.email ? su.email : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+/* Feedback rate-limit helpers: allow max 3 sends per 24 hours (localStorage)
+   Key: 'feedback_sent_timestamps' -> JSON array of epoch ms
+*/
+function _feedback_canSend() {
+  try {
+    const raw = localStorage.getItem("feedback_sent_timestamps");
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    let arr = raw ? JSON.parse(raw) : [];
+    // keep only last 24h
+    arr = arr.filter((t) => now - t < dayMs);
+    // persist cleaned
+    localStorage.setItem("feedback_sent_timestamps", JSON.stringify(arr));
+    return arr.length < 3;
+  } catch (e) {
+    return true;
+  }
+}
+
+function _feedback_recordSend() {
+  try {
+    const raw = localStorage.getItem("feedback_sent_timestamps");
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    let arr = raw ? JSON.parse(raw) : [];
+    arr = arr.filter((t) => now - t < dayMs);
+    arr.push(now);
+    localStorage.setItem("feedback_sent_timestamps", JSON.stringify(arr));
+  } catch (e) {}
+}
+
+function sendFeedbackPanel() {
+  const ta = document.getElementById("fbPanelText");
+  const notice = document.getElementById("fbPanelNotice");
+  const btn = document.getElementById("fbPanelSend");
+  if (!ta || !btn) return;
+  const text = (ta.value || "").trim();
+  if (!_feedback_canSend()) {
+    if (notice) {
+      notice.textContent =
+        "تم الوصول للحد الأقصى من الملاحظات (3 خلال 24 ساعة). حاول لاحقًا.";
+    }
+    return;
+  }
+  if (!text) {
+    if (notice) {
+      notice.textContent = "الرجاء كتابة مشكلتك أو اقتراحك قبل الإرسال.";
+    }
+    return;
+  }
+  btn.disabled = true;
+  if (notice) notice.textContent = "جارٍ فتح نافذة البريد لإرسال الملاحظة...";
+
+  const recipient = "Konozeleulma@gmail.com";
+  const senderEmail = _getSavedUserEmail();
+  const subject = "ملاحظة من تطبيق كنوز العلمة";
+  const bodyLines = [];
+  bodyLines.push("المرسل: " + (senderEmail || "(غير معروف)"));
+  bodyLines.push("");
+  bodyLines.push("الملاحظة / المشكلة:");
+  bodyLines.push(text);
+  const body = encodeURIComponent(bodyLines.join("\n"));
+  const mailto = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${encodeURIComponent(subject)}&body=${body}`;
+
+  let opened = false;
+  try {
+    const w = window.open(mailto, "_blank");
+    opened = !!w;
+  } catch (e) {
+    opened = false;
+  }
+  if (!opened) {
+    window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${body}`;
+  }
+  // record this attempt for rate-limiting
+  try {
+    _feedback_recordSend();
+  } catch (e) {}
+  setTimeout(() => {
+    btn.disabled = false;
+    if (notice)
+      notice.textContent =
+        "تم فتح نافذة البريد — يرجى الضغط على إرسال في عميل البريد الخاص بك.";
+    // ensure the notice is visible by scrolling the panel body to bottom
+    try {
+      const panel = document.getElementById("feedbackPanel");
+      const body = panel?.querySelector(".account-panel-body");
+      if (body) body.scrollTop = body.scrollHeight;
+      const n = document.getElementById("fbPanelNotice");
+      if (n) n.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (e) {}
+  }, 800);
+}
+
+window.openFeedbackPanel = openFeedbackPanel;
+window.closeFeedbackPanel = closeFeedbackPanel;
+window.sendFeedbackPanel = sendFeedbackPanel;
+
 function _getAccountFieldKey(fieldId) {
   const map = {
     accountName: "username",
@@ -3342,6 +3474,16 @@ function onUserMenuAction(action) {
       break;
     case "faq":
       window.location.href = "FAQ.html";
+      break;
+    case "feedback":
+      window.location.href = "FAQ.html#faq-feedback-item";
+      break;
+    case "feedbackPanel":
+      try {
+        openFeedbackPanel();
+      } catch (e) {
+        console.error(e);
+      }
       break;
     case "favoriteSuppliers":
       showFavoriteSuppliers();

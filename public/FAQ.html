@@ -91,6 +91,36 @@
         background-color: #705433;
         color: #f6ead5;
       }
+      /* Feedback section styles */
+      .feedback-area {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .feedback-area textarea {
+        min-height: 120px;
+        resize: vertical;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(112, 84, 57, 0.18);
+        font-size: 15px;
+        font-family: inherit;
+      }
+      .feedback-send-btn {
+        align-self: flex-start;
+        background: #705433;
+        color: #f6ead5;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      .feedback-send-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -214,6 +244,31 @@
           </p>
         </div>
       </div>
+
+      <!-- Feedback section -->
+      <div class="faq-item" id="faq-feedback-item">
+        <div class="faq-question">
+          أرسل ملاحظة أو بلّغ عن مشكلة / اقترح ميزة
+        </div>
+        <div class="faq-answer">
+          <div class="feedback-area">
+            <label for="feedbackText"
+              >أخبرنا ما هي المشكلة أو الميزة التي تود إضافتها:</label
+            >
+            <textarea
+              id="feedbackText"
+              placeholder="صف المشكلة أو الميزة التي تريد إضافتها هنا..."
+            ></textarea>
+            <button id="feedbackSend" class="feedback-send-btn">
+              إرسال الملاحظة
+            </button>
+            <div
+              id="feedbackNotice"
+              style="color: #4b3a2b; font-size: 14px; display: none"
+            ></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -239,6 +294,135 @@
           }
         });
       });
+
+      // Feedback send handler
+      const fbTextarea = document.getElementById("feedbackText");
+      const fbBtn = document.getElementById("feedbackSend");
+      const fbNotice = document.getElementById("feedbackNotice");
+
+      function _getSavedUserEmail() {
+        try {
+          const raw = localStorage.getItem("savedUser");
+          if (!raw) return "";
+          const su = JSON.parse(raw);
+          return su && su.email ? su.email : "";
+        } catch (e) {
+          return "";
+        }
+      }
+
+      // Rate-limit helpers for FAQ feedback (share same storage key)
+      function _faq_canSend() {
+        try {
+          const raw = localStorage.getItem("feedback_sent_timestamps");
+          const now = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          let arr = raw ? JSON.parse(raw) : [];
+          arr = arr.filter((t) => now - t < dayMs);
+          localStorage.setItem("feedback_sent_timestamps", JSON.stringify(arr));
+          return arr.length < 3;
+        } catch (e) {
+          return true;
+        }
+      }
+
+      function _faq_recordSend() {
+        try {
+          const raw = localStorage.getItem("feedback_sent_timestamps");
+          const now = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          let arr = raw ? JSON.parse(raw) : [];
+          arr = arr.filter((t) => now - t < dayMs);
+          arr.push(now);
+          localStorage.setItem("feedback_sent_timestamps", JSON.stringify(arr));
+        } catch (e) {}
+      }
+
+      async function sendFeedback() {
+        const text = (fbTextarea?.value || "").trim();
+        if (!_faq_canSend()) {
+          fbNotice.style.display = "block";
+          fbNotice.textContent =
+            "تم الوصول للحد الأقصى من الملاحظات (3 خلال 24 ساعة). حاول لاحقًا.";
+          return;
+        }
+        if (!text) {
+          fbNotice.style.display = "block";
+          fbNotice.textContent = "الرجاء كتابة مشكلتك أو اقتراحك قبل الإرسال.";
+          return;
+        }
+        fbBtn.disabled = true;
+        fbNotice.style.display = "block";
+        fbNotice.textContent = "جارٍ فتح نافذة البريد لإرسال الملاحظة...";
+
+        const recipient = "Konozeleulma@gmail.com";
+        const senderEmail = _getSavedUserEmail();
+        const subject = "ملاحظة من تطبيق كنوز العلمة";
+        const bodyLines = [];
+        bodyLines.push("المرسل: " + (senderEmail || "(غير معروف)"));
+        bodyLines.push("");
+        bodyLines.push("الملاحظة / المشكلة:");
+        bodyLines.push(text);
+        const body = encodeURIComponent(bodyLines.join("\n"));
+        const mailto = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${encodeURIComponent(subject)}&body=${body}`;
+
+        // Try to open Gmail compose in a new tab; fallback to mailto if blocked
+        let opened = false;
+        try {
+          const w = window.open(mailto, "_blank");
+          opened = !!w;
+        } catch (e) {
+          opened = false;
+        }
+        if (!opened) {
+          // fallback to mailto link which uses default mail handler
+          window.location.href = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${body}`;
+        }
+
+        // record the attempt
+        try {
+          _faq_recordSend();
+        } catch (e) {}
+
+        setTimeout(() => {
+          fbBtn.disabled = false;
+          fbNotice.textContent =
+            "تم فتح نافذة البريد — يرجى الضغط على إرسال في عميل البريد الخاص بك.";
+          // Ensure the notice is visible by scrolling the feedback area
+          try {
+            const container = document.getElementById("faq-feedback-item");
+            const area = container?.querySelector(".feedback-area");
+            if (area) area.scrollTop = area.scrollHeight;
+            if (fbNotice)
+              fbNotice.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          } catch (e) {}
+        }, 800);
+      }
+
+      if (fbBtn) fbBtn.addEventListener("click", sendFeedback);
+
+      // If the page is opened with the feedback anchor, expand that FAQ item.
+      if (window.location.hash === "#faq-feedback-item") {
+        const feedbackItem = document.getElementById("faq-feedback-item");
+        if (feedbackItem) {
+          const question = feedbackItem.querySelector(".faq-question");
+          const answer = feedbackItem.querySelector(".faq-answer");
+          if (
+            question &&
+            answer &&
+            !feedbackItem.classList.contains("active")
+          ) {
+            feedbackItem.classList.add("active");
+            answer.style.maxHeight = answer.scrollHeight + "px";
+            setTimeout(() => {
+              feedbackItem.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }, 100);
+          }
+        }
+      }
     </script>
   </body>
 </html>

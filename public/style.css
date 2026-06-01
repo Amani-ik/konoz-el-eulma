@@ -1917,6 +1917,42 @@ body.light-mode #userMenuPanel .theme-toggle-btn:hover {
   align-items: center;
   gap: 6px;
 }
+
+/* FEEDBACK PANEL (same layout as account panel) */
+#feedbackBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+#feedbackBackdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+#feedbackPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(360px, 92vw);
+  z-index: 9501;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(6, 10, 18, 0.96);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.55);
+  transform: translateX(100%);
+  transition: transform 0.32s ease;
+  overscroll-behavior: contain;
+}
+#feedbackPanel.open {
+  transform: translateX(0);
+}
 .account-panel-subtitle {
   color: rgba(255, 255, 255, 0.65);
   font-size: 11px;

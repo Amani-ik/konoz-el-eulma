@@ -338,7 +338,32 @@
         <div class="user-menu-section">مساعدة</div>
         <button class="user-menu-item" onclick="onUserMenuAction('tutorials')"><span class="icon">📕</span>دروس مفيدة <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
         <button class="user-menu-item" onclick="onUserMenuAction('faq')"><span class="icon">❓</span>الأسئلة الشائعة</button>
+        <button class="user-menu-item" onclick="onUserMenuAction('feedback')"><span class="icon">✉️</span>أرسل ملاحظة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('follow')"><span class="icon">❤️</span>تابعنا <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
+      </div>
+    </aside>
+
+    <!-- ═ FEEDBACK PANEL ═ -->
+    <div id="feedbackBackdrop" onclick="closeFeedbackPanel()"></div>
+    <aside id="feedbackPanel" aria-hidden="true">
+      <div class="account-panel-header">
+        <div>
+          <div class="account-panel-subtitle">ملاحظات</div>
+          <div class="account-panel-title">أرسل ملاحظتك</div>
+        </div>
+        <div class="account-panel-header-actions">
+          <button class="account-panel-close" onclick="closeFeedbackPanel()" aria-label="Close panel">×</button>
+        </div>
+      </div>
+      <div class="account-panel-body">
+        <div>
+          <label for="fbPanelText" style="color:#cfc9c3;display:block;margin-bottom:8px">ما المشكلة أو الميزّة التي تريد اقتراحها؟</label>
+          <textarea id="fbPanelText" style="width:100%;min-height:140px;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.4);color:#fff"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button id="fbPanelSend" class="ebtn" style="padding:10px 14px;min-width:160px" onclick="sendFeedbackPanel()">إرسال الملاحظة</button>
+          <div id="fbPanelNotice" style="color:#cfc9c3"></div>
+        </div>
       </div>
     </aside>
 
