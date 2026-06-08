@@ -58,25 +58,57 @@
           >
             تسجيل الدخول
           </div>
-          <input
-            class="linput"
-            id="emailIn"
-            type="email"
-            placeholder="البريد الإلكتروني…"           
-          />
-          <input
-            class="linput"
-            id="passIn"
-            type="password"
-            placeholder="كلمة المرور…"            
-          />
-          <button
-            class="ebtn"           
-            id="lBtn"
-            onclick="handleLogin()"
+          <form
+            id="loginForm"
+            class="login-form"
+            autocomplete="off"
+            novalidate
+            onsubmit="event.preventDefault(); handleLogin();"
           >
-            دخول الآن
-          </button>
+            <input
+              type="text"
+              name="prevent_autofill_username"
+              class="login-autofill-trap"
+              tabindex="-1"
+              aria-hidden="true"
+              autocomplete="username"
+            />
+            <input
+              type="password"
+              name="prevent_autofill_password"
+              class="login-autofill-trap"
+              tabindex="-1"
+              aria-hidden="true"
+              autocomplete="current-password"
+            />
+            <input
+              class="linput"
+              id="emailIn"
+              name="konoz_login_email"
+              type="email"
+              inputmode="email"
+              placeholder="البريد الإلكتروني…"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-login-field
+            />
+            <input
+              class="linput"
+              id="passIn"
+              name="konoz_login_secret"
+              type="password"
+              placeholder="كلمة المرور…"
+              autocomplete="new-password"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              readonly
+              data-login-field
+            />
+            <button class="ebtn" id="lBtn" type="submit">دخول الآن</button>
+          </form>
           <div style="margin-top: 8px; text-align: center">
             <a
               href="#"
@@ -117,6 +149,110 @@
         <div style="margin-top: 40px; text-align: center; color: rgba(255, 255, 255, 0.4); font-size: 12px; font-weight: 600;">
           طورت بواسطة فريق كنوز العلمة • جميع الحقوق محفوظة © 2026
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ REGISTER ═══ -->
+    <div class="screen hidden" id="registerScreen">
+      <div class="lp-wrap" id="rpWrap"></div>
+      <div class="lcard">
+        <span class="globe">👑</span>
+        <div class="rtitle">كنوز العلمة</div>
+        <div class="rsub">انضم الآن إلى دليل الموردين</div>
+        <div id="regStep1">
+          <div
+            style="
+              color: rgba(255, 255, 255, 0.55);
+              font-size: 13px;
+              margin-bottom: 20px;
+              font-weight: 700;
+            "
+          >
+            تسجيل حساب جديد
+          </div>
+          <input class="linput" id="regEmail" type="email" placeholder="البريد الإلكتروني…" oninput="validateRegisterStep1()" />
+          <input class="linput" id="regPassword" type="password" placeholder="كلمة المرور…" oninput="validateRegisterStep1()" />
+          <input class="linput" id="regConfirmPassword" type="password" placeholder="تأكيد كلمة المرور…" oninput="validateRegisterStep1()" />
+          <button class="ebtn" id="regNextBtn" onclick="handleRegisterStep1()" disabled style="opacity: 0.4; margin-top: 12px;">
+            التالي
+          </button>
+          <div style="margin-top: 14px; text-align: right; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
+            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input id="regTerms" type="checkbox" onclick="validateRegisterStep1()" style="width: 16px; height: 16px;" />
+              أقبل <a href="Terms.html" target="_blank" rel="noopener noreferrer" style="color: #50e080; text-decoration: none;">شروط الاستخدام</a> و <a href="Privacy.html" target="_blank" rel="noopener noreferrer" style="color: #50e080; text-decoration: none;">سياسة الخصوصية</a>
+            </label>
+          </div>
+          <div style="margin-top: 16px;">
+            <a
+              href="#"
+              onclick="event.preventDefault(); showLoginScreen();"
+              style="
+                background: none;
+                border: none;
+                color: rgba(255, 255, 255, 0.5);
+                cursor: pointer;
+                font-size: 13px;
+                font-family: &quot;Nunito&quot;, sans-serif;
+                text-decoration: none;
+                transition: color 0.2s;
+              "
+              onmouseover="this.style.color='rgba(255, 255, 255, 0.8)'"
+              onmouseout="this.style.color='rgba(255, 255, 255, 0.5)'"
+            >
+              لديك حساب بالفعل؟ <span style="color: #50e080; font-weight: 700;">تسجيل الدخول</span>
+            </a>
+          </div>
+        </div>
+        <div id="regStep2" style="display: none;">
+          <div
+            style="
+              color: rgba(255, 255, 255, 0.55);
+              font-size: 13px;
+              margin-bottom: 20px;
+              font-weight: 700;
+            "
+          >
+            أكمل بياناتك
+          </div>
+          <input class="linput" id="regUsername" type="text" placeholder="اسم المستخدم…" />
+          <input class="linput" id="regFullName" type="text" placeholder="الاسم الكامل…" />
+          <input class="linput" id="regPhone" type="tel" placeholder="رقم الهاتف…" />
+          <input class="linput" id="regDob" type="date" />
+          <button class="ebtn" id="regStep2Btn" onclick="handleRegisterStep2()" style="margin-top: 12px;">
+            التالي
+          </button>
+          <button class="ebtn" id="planBtn" onclick="handleChoosePlan()" style="margin-top: 12px; background: rgba(255,255,255,0.12);">
+            اختر خطتك
+          </button>
+          <div style="margin-top: 16px; text-align: center; color: rgba(255, 255, 255, 0.5); font-size: 13px;">
+            <a href="#" onclick="event.preventDefault(); showLoginScreen();" style="color: rgba(255,255,255,0.5); text-decoration: none;">عودة إلى تسجيل الدخول</a>
+          </div>
+        </div>
+        <div id="registerError" style="margin-top: 16px; color: #f6b33f; font-size: 13px; min-height: 20px; text-align: center;"></div>
+      </div>
+    </div>
+
+    <!-- ═══ PENDING APPROVAL ═══ -->
+    <div class="screen hidden" id="pendingScreen">
+      <div class="lcard">
+        <span class="globe">⏳</span>
+        <div class="rtitle">كنوز العلمة</div>
+        <div class="rsub">حسابك قيد المراجعة</div>
+        <p
+          style="
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 14px;
+            line-height: 1.7;
+            margin: 22px 0 8px;
+            font-weight: 600;
+          "
+        >
+          شكراً لتسجيلك! تم استلام طلبك بنجاح.<br />
+          سيتم مراجعته من قبل الإدارة وستتمكن من الدخول بعد الموافقة.
+        </p>
+        <button class="ebtn" onclick="showLoginScreen()" style="margin-top: 16px;">
+          العودة إلى تسجيل الدخول
+        </button>
       </div>
     </div>
 
@@ -327,7 +463,8 @@
       <div class="user-menu-body">
         <div class="user-menu-section">خيارات</div>
         <button class="user-menu-item" onclick="onUserMenuAction('account')"><span class="icon">👤</span>عرض الحساب</button>
-        <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')"><span class="icon">⭐</span>الموردون المفضلون </button>  
+        <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')"><span class="icon">⭐</span>الموردون المفضلون </button>
+        <button class="user-menu-item admin-dashboard-item" id="adminDashboardMenuItem" hidden onclick="onUserMenuAction('adminDashboard')"><span class="icon">🛡️</span>لوحة الإدارة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('logout')"><span class="icon">🔓</span>تسجيل الخروج</button>
         <div class="user-menu-section">قوائم قريبة</div>
         <button class="user-menu-item" onclick="onUserMenuAction('restaurants')"><span class="icon">🍽️</span>مطاعم قريبة <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
@@ -336,9 +473,9 @@
         <button class="user-menu-item" onclick="onUserMenuAction('ubers')"><span class="icon">🚕</span>خدمات نقل <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
         <button class="user-menu-item" onclick="onUserMenuAction('pharmacies')"><span class="icon">💊</span>صيدليات قريبة <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
         <div class="user-menu-section">مساعدة</div>
+        <button class="user-menu-item" onclick="onUserMenuAction('feedback')"><span class="icon">✉️</span>أرسل ملاحظة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('tutorials')"><span class="icon">📕</span>دروس مفيدة <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
         <button class="user-menu-item" onclick="onUserMenuAction('faq')"><span class="icon">❓</span>الأسئلة الشائعة</button>
-        <button class="user-menu-item" onclick="onUserMenuAction('feedback')"><span class="icon">✉️</span>أرسل ملاحظة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('follow')"><span class="icon">❤️</span>تابعنا <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
       </div>
     </aside>

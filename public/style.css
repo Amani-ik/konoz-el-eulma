@@ -24,7 +24,9 @@ body {
 }
 
 /* ════ LOGIN ════ */
-#loginScreen {
+#loginScreen,
+#registerScreen,
+#pendingScreen {
   background: radial-gradient(ellipse at 40% 30%, #0d2d10 0%, #050d08 70%);
   display: flex;
   align-items: center;
@@ -174,9 +176,11 @@ body {
   font-family: "Nunito", sans-serif;
   outline: none;
   margin-bottom: 14px;
+  color-scheme: dark;
   transition:
     border-color 0.2s,
-    box-shadow 0.2s;
+    box-shadow 0.2s,
+    background-color 0.2s;
 }
 .linput::placeholder {
   color: rgba(255, 255, 255, 0.22);
@@ -184,6 +188,41 @@ body {
 .linput:focus {
   border-color: #50e080;
   box-shadow: 0 0 0 3px rgba(80, 200, 120, 0.12);
+}
+.login-form {
+  width: 100%;
+}
+.login-autofill-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.linput:-webkit-autofill,
+.linput:-webkit-autofill:hover,
+.linput:-webkit-autofill:focus,
+.linput:-webkit-autofill:active,
+.linput[data-login-field]:-webkit-autofill,
+.linput[data-login-field]:-webkit-autofill:hover,
+.linput[data-login-field]:-webkit-autofill:focus,
+.linput[data-login-field]:-webkit-autofill:active {
+  -webkit-text-fill-color: #fff !important;
+  caret-color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.06) inset !important;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  transition: background-color 99999s ease-out 0s;
+}
+.linput:-moz-autofill,
+.linput:-moz-autofill-preview,
+.linput[data-login-field]:-moz-autofill,
+.linput[data-login-field]:-moz-autofill-preview {
+  filter: none;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.06) inset !important;
 }
 .ebtn {
   width: 100%;
@@ -211,6 +250,14 @@ body {
 }
 #loginScreen:not(.hidden) ~ #csBtn,
 #loginScreen:not(.hidden) ~ .zoom-controls {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide customer service and zoom on register screen */
+#registerScreen:not(.hidden) ~ #csBtn,
+#registerScreen:not(.hidden) ~ .zoom-controls {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;

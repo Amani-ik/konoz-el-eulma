@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>تسجيل الدخول — كنوز العلمة</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="logo.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="screen" id="loginScreen">
+      <div class="lp-wrap" id="lpWrap"></div>
+      <div class="lcard">
+        <span class="globe">👑</span>
+        <div class="rtitle">كنوز العلمة</div>
+        <div class="rsub">دخول لوحة الإدارة</div>
+        <form
+          id="loginForm"
+          class="login-form"
+          autocomplete="off"
+          novalidate
+        >
+          <input
+            type="text"
+            name="prevent_autofill_username"
+            class="login-autofill-trap"
+            tabindex="-1"
+            aria-hidden="true"
+            autocomplete="username"
+          />
+          <input
+            type="password"
+            name="prevent_autofill_password"
+            class="login-autofill-trap"
+            tabindex="-1"
+            aria-hidden="true"
+            autocomplete="current-password"
+          />
+          <input
+            class="linput"
+            id="emailIn"
+            name="konoz_admin_login_email"
+            type="email"
+            inputmode="email"
+            placeholder="البريد الإلكتروني…"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            data-login-field
+          />
+          <input
+            class="linput"
+            id="passIn"
+            name="konoz_admin_login_secret"
+            type="password"
+            placeholder="كلمة المرور…"
+            autocomplete="new-password"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            readonly
+            data-login-field
+          />
+          <button class="ebtn" id="lBtn" type="submit">دخول</button>
+        </form>
+        <p
+          id="loginError"
+          style="color: #ff8a8a; font-size: 13px; margin-top: 12px; min-height: 18px"
+        ></p>
+        <div style="margin-top: 16px">
+          <a
+            href="index.html"
+            style="color: rgba(255,255,255,0.5); font-size: 13px; text-decoration: none"
+            >العودة للتطبيق</a
+          >
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      import { auth } from "./firebase-config.js";
+      import {
+        signInWithEmailAndPassword,
+        onAuthStateChanged,
+      } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+      import { initLoginFields } from "./login-fields.js";
+
+      const emailIn = document.getElementById("emailIn");
+      const passIn = document.getElementById("passIn");
+      const loginForm = document.getElementById("loginForm");
+      const lBtn = document.getElementById("lBtn");
+      const loginError = document.getElementById("loginError");
+
+      initLoginFields();
+
+      onAuthStateChanged(auth, (user) => {
+        if (user) window.location.replace("admin.html");
+      });
+
+      const submitLogin = async () => {
+        const email = emailIn?.value.trim();
+        const password = passIn?.value || "";
+        if (!email || !password) {
+          if (loginError) loginError.textContent = "أدخل البريد وكلمة المرور.";
+          return;
+        }
+        if (loginError) loginError.textContent = "";
+        lBtn.disabled = true;
+        lBtn.textContent = "جاري الدخول…";
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          window.location.replace("admin.html");
+        } catch (err) {
+          if (loginError)
+            loginError.textContent = "بيانات الدخول غير صحيحة.";
+          console.error(err);
+        } finally {
+          lBtn.disabled = false;
+          lBtn.textContent = "دخول";
+        }
+      };
+
+      loginForm?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitLogin();
+      });
+    </script>
+  </body>
+</html>

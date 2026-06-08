@@ -1,7 +1,10 @@
 import { auth } from "./firebase-config.js";
+import { initLoginFields, clearLoginFields } from "./login-fields.js";
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { db } from "./firebase-config.js";
@@ -21,6 +24,93 @@ import {
 
 let NEWS_DATA = [];
 let SYSTEM_DATA = [];
+
+// Live session subscription handle
+let CURRENT_SESSION_UNSUB = null;
+
+function generateSessionToken() {
+  try {
+    const arr = new Uint8Array(12);
+    crypto.getRandomValues(arr);
+    return (
+      Array.from(arr)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("") +
+      "-" +
+      Date.now().toString(36)
+    );
+  } catch (e) {
+    return Math.random().toString(36).slice(2) + "-" + Date.now().toString(36);
+  }
+}
+
+function isAdminUser(userDoc = {}) {
+  const role = String(userDoc.role || userDoc.userType || "")
+    .trim()
+    .toLowerCase();
+  return (
+    role === "admin" ||
+    role === "administrator" ||
+    role === "مدير" ||
+    role === "مشرف"
+  );
+}
+
+function isStrictAdmin(userDoc = {}) {
+  return String(userDoc.role || "").trim().toLowerCase() === "admin";
+}
+
+function updateAdminMenuVisibility(userDoc = {}) {
+  const item = document.getElementById("adminDashboardMenuItem");
+  if (!item) return;
+  item.hidden = !isStrictAdmin(userDoc);
+}
+
+async function startSessionMonitor(userId) {
+  try {
+    if (!userId) return;
+    const userDocRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userDocRef);
+    const userDoc = userSnap.exists() ? userSnap.data() || {} : {};
+    if (isAdminUser(userDoc)) return;
+
+    if (CURRENT_SESSION_UNSUB) {
+      try {
+        CURRENT_SESSION_UNSUB();
+      } catch (e) {}
+      CURRENT_SESSION_UNSUB = null;
+    }
+    CURRENT_SESSION_UNSUB = onSnapshot(userDocRef, async (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      if (isAdminUser(data)) return;
+      const isActive = data.isSessionActive === true;
+      const currentId = data.currentSessionId || "";
+      const localId = localStorage.getItem("active_device_session") || "";
+      if (isActive && currentId && currentId !== localId) {
+        try {
+          alert(
+            "🔒 Security Alert: This account has been logged in from another device. Your session here will be terminated.",
+          );
+        } catch (e) {}
+        // clear local token, unsubscribe, sign out and reload
+        localStorage.removeItem("active_device_session");
+        if (CURRENT_SESSION_UNSUB) {
+          try {
+            CURRENT_SESSION_UNSUB();
+          } catch (e) {}
+          CURRENT_SESSION_UNSUB = null;
+        }
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        window.location.reload();
+      }
+    });
+  } catch (err) {
+    console.error("startSessionMonitor error:", err);
+  }
+}
 
 // ════════════════════════════════════════════════════════════════
 // ═══ إنشاء وثيقة المستخدم الجديد في Firestore ═══
@@ -57,6 +147,9 @@ async function createNewUserDocument(
     if (!existingDoc.exists()) {
       userData.created_at = serverTimestamp();
       userData["created at"] = serverTimestamp();
+      // Initialize session fields for new users
+      userData.isSessionActive = false;
+      userData.currentSessionId = "";
     }
     await setDoc(userDocRef, userData, { merge: true });
     console.log("تم حفظ بيانات المستخدم بنجاح في Firestore!");
@@ -121,13 +214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loginBtn = document.getElementById("lBtn");
 
   if (emailInput && passwordInput && loginBtn) {
-    // تعطيل الزر في البداية
-    loginBtn.disabled = true;
-    loginBtn.style.opacity = "0.4";
-
-    // إضافة مستمعين للتحقق المباشر من البيانات
-    emailInput.addEventListener("input", validateLoginForm);
-    passwordInput.addEventListener("input", validateLoginForm);
+    initLoginFields(validateLoginForm);
 
     console.log("✓ تم تهيئة نموذج تسجيل الدخول بنجاح");
   } else {
@@ -151,6 +238,94 @@ function validateLoginForm() {
   loginBtn.style.opacity = isValid ? "1" : "0.4";
 }
 
+const LOGIN_RATE_LIMIT_KEY = "login_rate_limit";
+const SIGNUP_DAILY_LIMIT_KEY = "signup_last_attempt_date";
+const LOGIN_MAX_FAILURES = 3;
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;
+
+function _getLocalDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function _readLoginRateLimit() {
+  try {
+    const raw = localStorage.getItem(LOGIN_RATE_LIMIT_KEY);
+    if (!raw) return { count: 0, blockedUntil: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      count: Number(parsed.count) || 0,
+      blockedUntil: Number(parsed.blockedUntil) || 0,
+    };
+  } catch (e) {
+    return { count: 0, blockedUntil: 0 };
+  }
+}
+
+function _writeLoginRateLimit(state) {
+  try {
+    localStorage.setItem(LOGIN_RATE_LIMIT_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+function _clearLoginRateLimit() {
+  try {
+    localStorage.removeItem(LOGIN_RATE_LIMIT_KEY);
+  } catch (e) {}
+}
+
+function _getLoginBlockStatus() {
+  const state = _readLoginRateLimit();
+  const now = Date.now();
+  if (state.blockedUntil > now) {
+    return { blocked: true, blockedUntil: state.blockedUntil };
+  }
+  if (state.blockedUntil > 0 && state.blockedUntil <= now) {
+    _writeLoginRateLimit({ count: 0, blockedUntil: 0 });
+  }
+  return { blocked: false };
+}
+
+function _recordLoginFailure() {
+  const { count } = _readLoginRateLimit();
+  const next = count + 1;
+  if (next >= LOGIN_MAX_FAILURES) {
+    _writeLoginRateLimit({ count: next, blockedUntil: Date.now() + LOGIN_BLOCK_MS });
+  } else {
+    _writeLoginRateLimit({ count: next, blockedUntil: 0 });
+  }
+}
+
+function _isLoginFailureError(code) {
+  return [
+    "auth/wrong-password",
+    "auth/user-not-found",
+    "auth/invalid-credential",
+    "auth/invalid-email",
+  ].includes(code);
+}
+
+function _getLoginBlockedMessage(blockedUntil) {
+  const mins = Math.max(1, Math.ceil((blockedUntil - Date.now()) / 60000));
+  return `تم حظر تسجيل الدخول مؤقتاً بعد 3 محاولات فاشلة. يرجى المحاولة بعد ${mins} دقيقة.`;
+}
+
+function _canAttemptSignupToday() {
+  try {
+    return localStorage.getItem(SIGNUP_DAILY_LIMIT_KEY) !== _getLocalDateKey();
+  } catch (e) {
+    return true;
+  }
+}
+
+function _recordSignupAttemptToday() {
+  try {
+    localStorage.setItem(SIGNUP_DAILY_LIMIT_KEY, _getLocalDateKey());
+  } catch (e) {}
+}
+
 // الدالة الرئيسية لتسجيل الدخول
 async function handleLogin() {
   if (!emailInput || !passwordInput || !loginBtn) {
@@ -172,6 +347,12 @@ async function handleLogin() {
     return;
   }
 
+  const loginBlock = _getLoginBlockStatus();
+  if (loginBlock.blocked) {
+    alert(_getLoginBlockedMessage(loginBlock.blockedUntil));
+    return;
+  }
+
   // تغيير حالة الزر إلى "جاري التحميل"
   loginBtn.disabled = true;
   loginBtn.style.opacity = "0.6";
@@ -188,6 +369,66 @@ async function handleLogin() {
     const user = userCredential.user;
 
     console.log("✓ تم دخول المستخدم:", user.email);
+    _clearLoginRateLimit();
+
+    let userDoc = {};
+    let isAdmin = false;
+
+    // --- Account status check ---
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userDocRef);
+      userDoc = userSnap.exists() ? userSnap.data() || {} : {};
+      isAdmin = isAdminUser(userDoc);
+      const accountStatus = getUserAccountStatus(userDoc);
+
+      if (!isAdmin && accountStatus === "pending") {
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        showPendingScreen();
+        loginBtn.disabled = false;
+        loginBtn.style.opacity = "1";
+        loginBtn.textContent = originalText;
+        return;
+      }
+
+      if (!isAdmin && accountStatus === "disabled") {
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        alert("تم تعطيل حسابك. يرجى التواصل مع الإدارة.");
+        loginBtn.disabled = false;
+        loginBtn.style.opacity = "1";
+        loginBtn.textContent = originalText;
+        return;
+      }
+
+      if (!isAdmin) {
+        // Claim session for this device; any other active session is superseded
+        // (startSessionMonitor on the old device will detect the change and sign out)
+        const sessionToken = generateSessionToken();
+        localStorage.setItem("active_device_session", sessionToken);
+        await setDoc(
+          userDocRef,
+          {
+            isSessionActive: true,
+            currentSessionId: sessionToken,
+            updated_at: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        // Start live monitor to detect remote claims
+        try {
+          startSessionMonitor(user.uid);
+        } catch (e) {
+          console.error("Failed to start session monitor:", e);
+        }
+      }
+    } catch (err) {
+      console.error("Session check error:", err);
+    }
 
     // Extract username from email (part before @)
     const username = email.split("@")[0];
@@ -203,14 +444,17 @@ async function handleLogin() {
       }),
     );
 
-    // Save user document to Firestore with username
-    await createNewUserDocument(user.uid, username, user.email, "client");
+    // Save user document to Firestore with username (preserve admin role)
+    const loginRole = isAdmin
+      ? String(userDoc.role || userDoc.userType || "admin").trim()
+      : "client";
+    await createNewUserDocument(user.uid, username, user.email, loginRole);
     await _syncUserInfoToFirestore({
       uid: user.uid,
       username: username,
       email: user.email || "-",
       fullName: user.displayName || username,
-      role: "client",
+      role: loginRole,
       photoURL: user.photoURL || DEFAULT_PROFILE_PHOTO,
     });
 
@@ -257,9 +501,7 @@ async function handleLogin() {
     window.S = window.S || {};
     window.S.user = displayName;
 
-    // تفريغ الحقول بعد النجاح
-    emailInput.value = "";
-    passwordInput.value = "";
+    clearLoginFields();
     validateLoginForm();
 
     // تحديث وتهيئة جميع عناصر الواجهة (يشمل تحديث الاختبارات)
@@ -294,6 +536,14 @@ async function handleLogin() {
         break;
       default:
         errorMessage = "تعذر تسجيل الدخول حالياً، يرجى المحاولة مرة أخرى.";
+    }
+
+    if (_isLoginFailureError(error.code)) {
+      _recordLoginFailure();
+      const block = _getLoginBlockStatus();
+      if (block.blocked) {
+        errorMessage = _getLoginBlockedMessage(block.blockedUntil);
+      }
     }
 
     alert(errorMessage);
@@ -536,7 +786,7 @@ const DISTRICTS = [
       { x: 78, y: 67, mi: 3, name: "Assil decoration" },
       { x: 70, y: 62, mi: 4, name: "KOJAK EMBALLAGE" },
       { x: 93, y: 77, mi: 5, name: "Aymen emballage" },
-      { x: 32, y: 50, mi: 6, name: " - " },
+      { x: 43, y: 50, mi: 6, name: " - " },
       { x: 37, y: 50, mi: 7, name: "EL-SAFAYA" },
     ],
   },
@@ -827,6 +1077,7 @@ function _getDisplayName(userKeyOrReview) {
 /* ══ LOGIN ══ */
 (() => {
   const c = document.getElementById("lpWrap");
+  const r = document.getElementById("rpWrap");
   const cols = [
     "#50e080",
     "#a0f8c0",
@@ -841,6 +1092,10 @@ function _getDisplayName(userKeyOrReview) {
     const sz = 3 + Math.random() * 5;
     p.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-duration:${9 + Math.random() * 10}s;animation-delay:${Math.random() * 9}s;`;
     c.appendChild(p);
+    if (r) {
+      const rp = p.cloneNode(true);
+      r.appendChild(rp);
+    }
   }
 })();
 function chkLogin() {
@@ -876,22 +1131,333 @@ function doLogin() {
   setTimeout(buildWorld, 400);
 }
 
-function toggleRegister() {
-  const phone = "213699173103";
-  const text = encodeURIComponent("أريد التسجيل في تطبيق كنوز العلمة");
-  const url = `https://wa.me/${phone}?text=${text}`;
+let regStep = 1;
+
+function resetRegistrationState() {
+  regStep = 1;
+  const step1 = document.getElementById("regStep1");
+  const step2 = document.getElementById("regStep2");
+  const nextBtn = document.getElementById("regNextBtn");
+  const errorEl = document.getElementById("registerError");
+
+  if (step1) step1.style.display = "block";
+  if (step2) step2.style.display = "none";
+  if (nextBtn) {
+    nextBtn.disabled = true;
+    nextBtn.style.opacity = "0.4";
+  }
+  if (errorEl) errorEl.textContent = "";
+
+  const fields = [
+    "regEmail",
+    "regPassword",
+    "regConfirmPassword",
+    "regUsername",
+    "regFullName",
+    "regPhone",
+    "regDob",
+  ];
+  fields.forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.value = "";
+  });
+  const termsCheckbox = document.getElementById("regTerms");
+  if (termsCheckbox) termsCheckbox.checked = false;
+}
+
+function getUserAccountStatus(userDoc = {}) {
+  if (isAdminUser(userDoc)) return "paid";
+  const status = String(userDoc.status || "paid").trim().toLowerCase();
+  if (status === "pending" || status === "paid" || status === "disabled") {
+    return status;
+  }
+  return "paid";
+}
+
+function showPendingScreen() {
+  const loginScreen = document.getElementById("loginScreen");
+  const registerScreen = document.getElementById("registerScreen");
+  const pendingScreen = document.getElementById("pendingScreen");
+  if (loginScreen) loginScreen.classList.add("hidden");
+  if (registerScreen) registerScreen.classList.add("hidden");
+  if (pendingScreen) pendingScreen.classList.remove("hidden");
+}
+
+function showRegistrationScreen() {
+  const loginScreen = document.getElementById("loginScreen");
+  const registerScreen = document.getElementById("registerScreen");
+  const pendingScreen = document.getElementById("pendingScreen");
+  if (loginScreen) loginScreen.classList.add("hidden");
+  if (pendingScreen) pendingScreen.classList.add("hidden");
+  if (registerScreen) {
+    registerScreen.classList.remove("hidden");
+    resetRegistrationState();
+  }
+}
+
+function showLoginScreen() {
+  const loginScreen = document.getElementById("loginScreen");
+  const registerScreen = document.getElementById("registerScreen");
+  const pendingScreen = document.getElementById("pendingScreen");
+  if (registerScreen) registerScreen.classList.add("hidden");
+  if (pendingScreen) pendingScreen.classList.add("hidden");
+  if (loginScreen) loginScreen.classList.remove("hidden");
+}
+
+function validateRegisterStep1() {
+  const email = document.getElementById("regEmail").value.trim();
+  const password = document.getElementById("regPassword").value.trim();
+  const confirmPassword = document
+    .getElementById("regConfirmPassword")
+    .value.trim();
+  const termsChecked = document.getElementById("regTerms").checked;
+  const nextBtn = document.getElementById("regNextBtn");
+
+  const canProceed =
+    email &&
+    password &&
+    confirmPassword &&
+    password === confirmPassword &&
+    termsChecked;
+
+  if (nextBtn) {
+    nextBtn.disabled = !canProceed;
+    nextBtn.style.opacity = canProceed ? "1" : "0.4";
+  }
+}
+
+function getRegisterAuthErrorMessage(error) {
+  switch (error?.code) {
+    case "auth/email-already-in-use":
+      return "هذا البريد الإلكتروني مستخدم بالفعل.";
+    case "auth/invalid-email":
+      return "صيغة البريد الإلكتروني غير صحيحة.";
+    case "auth/weak-password":
+      return "كلمة المرور ضعيفة، يرجى استخدام 6 أحرف على الأقل.";
+    case "auth/network-request-failed":
+      return "فشل الاتصال، يرجى التحقق من الإنترنت.";
+    default:
+      return "تعذر إنشاء الحساب، يرجى المحاولة مرة أخرى.";
+  }
+}
+
+async function handleRegisterStep1() {
+  const email = document.getElementById("regEmail").value.trim();
+  const password = document.getElementById("regPassword").value.trim();
+  const confirmPassword = document
+    .getElementById("regConfirmPassword")
+    .value.trim();
+  const termsChecked = document.getElementById("regTerms").checked;
+  const errorEl = document.getElementById("registerError");
+  const nextBtn = document.getElementById("regNextBtn");
+
+  if (!email || !password || !confirmPassword) {
+    if (errorEl)
+      errorEl.textContent =
+        "يرجى إدخال البريد الإلكتروني وكلمة المرور وتأكيدها.";
+    return;
+  }
+  if (password !== confirmPassword) {
+    if (errorEl)
+      errorEl.textContent = "كلمة المرور وتأكيد كلمة المرور غير متطابقين.";
+    return;
+  }
+  if (!termsChecked) {
+    if (errorEl)
+      errorEl.textContent = "يجب قبول شروط الاستخدام وسياسة الخصوصية للمتابعة.";
+    return;
+  }
+
+  if (!_canAttemptSignupToday()) {
+    if (errorEl)
+      errorEl.textContent =
+        "لقد استخدمت محاولة التسجيل المسموحة لهذا اليوم. يرجى المحاولة غداً.";
+    return;
+  }
+
+  const originalText = nextBtn?.textContent || "التالي";
+  if (nextBtn) {
+    nextBtn.disabled = true;
+    nextBtn.style.opacity = "0.6";
+    nextBtn.textContent = "جاري إنشاء الحساب...";
+  }
+  if (errorEl) errorEl.textContent = "";
+
+  try {
+    _recordSignupAttemptToday();
+    await createUserWithEmailAndPassword(auth, email, password);
+
+    const step1 = document.getElementById("regStep1");
+    const step2 = document.getElementById("regStep2");
+    if (step1 && step2) {
+      step1.style.display = "none";
+      step2.style.display = "block";
+      regStep = 2;
+    }
+  } catch (error) {
+    console.error("Registration auth error:", error);
+    if (errorEl) errorEl.textContent = getRegisterAuthErrorMessage(error);
+  } finally {
+    if (nextBtn) {
+      nextBtn.textContent = originalText;
+      validateRegisterStep1();
+    }
+  }
+}
+
+async function handleRegisterStep2() {
+  const email = document.getElementById("regEmail").value.trim();
+  const username = document.getElementById("regUsername").value.trim();
+  const fullName = document.getElementById("regFullName").value.trim();
+  const phone = document.getElementById("regPhone").value.trim();
+  const dob = document.getElementById("regDob").value;
+  const errorEl = document.getElementById("registerError");
+  const step2Btn = document.getElementById("regStep2Btn");
+
+  if (!username || !fullName || !phone || !dob) {
+    if (errorEl)
+      errorEl.textContent = "يرجى إدخال جميع المعلومات المطلوبة للمتابعة.";
+    return;
+  }
+
+  const user = auth.currentUser;
+  if (!user) {
+    if (errorEl)
+      errorEl.textContent =
+        "لم يتم العثور على حساب مسجل، يرجى إعادة التسجيل من البداية.";
+    return;
+  }
+
+  const originalText = step2Btn?.textContent || "التالي";
+  if (step2Btn) {
+    step2Btn.disabled = true;
+    step2Btn.style.opacity = "0.6";
+    step2Btn.textContent = "جاري الحفظ...";
+  }
+  if (errorEl) errorEl.textContent = "";
+
+  try {
+    const normalizedPhone = _normalizePhoneForStorage(phone);
+    const userDocRef = doc(db, "users", user.uid);
+    const userData = {
+      uid: user.uid,
+      email: user.email || email,
+      username,
+      fullName,
+      "full name": fullName,
+      phone: normalizedPhone,
+      dob,
+      dateOfBirth: dob,
+      role: "client",
+      status: "pending",
+      location: "-",
+      created_at: serverTimestamp(),
+      "created at": serverTimestamp(),
+      updated_at: serverTimestamp(),
+      isSessionActive: false,
+      currentSessionId: "",
+    };
+
+    await setDoc(userDocRef, userData);
+
+    try {
+      await signOut(auth);
+    } catch (signOutError) {
+      console.warn("Sign out after registration failed:", signOutError);
+    }
+
+    resetRegistrationState();
+    showPendingScreen();
+  } catch (error) {
+    console.error("Registration Firestore error:", error);
+    if (errorEl)
+      errorEl.textContent =
+        "تعذر حفظ بياناتك، يرجى المحاولة مرة أخرى.";
+  } finally {
+    if (step2Btn) {
+      step2Btn.disabled = false;
+      step2Btn.style.opacity = "1";
+      step2Btn.textContent = originalText;
+    }
+  }
+}
+
+function handleChoosePlan() {
+  const email = document.getElementById("regEmail").value.trim();
+  const username = document.getElementById("regUsername").value.trim();
+  const fullName = document.getElementById("regFullName").value.trim();
+  const phone = document.getElementById("regPhone").value.trim();
+  const dob = document.getElementById("regDob").value;
+  const errorEl = document.getElementById("registerError");
+
+  if (!username || !fullName || !phone || !dob) {
+    if (errorEl)
+      errorEl.textContent =
+        "يرجى إدخال جميع المعلومات المطلوبة قبل اختيار الخطة.";
+    return;
+  }
+
+  if (errorEl) errorEl.textContent = "";
+  const phoneNumber = "213699173103";
+  const text = encodeURIComponent(
+    `مرحباً، أود اختيار خطتي وطريقة الدفع.\n\n` +
+      `البريد الإلكتروني: ${email}\n` +
+      `اسم المستخدم: ${username}\n` +
+      `الاسم الكامل: ${fullName}\n` +
+      `رقم الهاتف: ${phone}\n` +
+      `تاريخ الميلاد: ${dob}`,
+  );
+  const url = `https://wa.me/${phoneNumber}?text=${text}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function doLogout() {
+function toggleRegister() {
+  showRegistrationScreen();
+}
+
+async function doLogout() {
+  // Attempt to clear session flag in Firestore
+  try {
+    const uid =
+      auth.currentUser && auth.currentUser.uid ? auth.currentUser.uid : null;
+    if (uid) {
+      const userDocRef = doc(db, "users", uid);
+      await setDoc(
+        userDocRef,
+        {
+          isSessionActive: false,
+          currentSessionId: "",
+          updated_at: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  } catch (err) {
+    console.error("Failed to clear session in Firestore:", err);
+  }
+
+  // Local cleanup
+  localStorage.removeItem("active_device_session");
   S.user = "";
   localStorage.removeItem("savedUser");
   localStorage.removeItem("lastScreen");
-
-  // حذف أي ذاكرة district/profile
   localStorage.removeItem("lastDistIdx");
   localStorage.removeItem("lastMarketId");
   localStorage.removeItem("lastMiniCardOpen");
+
+  // Unsubscribe live monitor if any
+  if (CURRENT_SESSION_UNSUB) {
+    try {
+      CURRENT_SESSION_UNSUB();
+    } catch (e) {}
+    CURRENT_SESSION_UNSUB = null;
+  }
+
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.warn("signOut failed:", e);
+  }
 
   sessionStorage.setItem("logoutReloadOnce", "1");
   window.location.reload();
@@ -2194,13 +2760,33 @@ async function _removeFavoriteFromFirestore(marketKey) {
 
 // Listen for auth state changes to keep favorites in sync
 try {
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     console.log("onAuthStateChanged ->", user && user.uid ? user.uid : user);
     if (user) {
+      try {
+        startSessionMonitor(user.uid);
+      } catch (e) {}
       _syncFavoritesFromFirestore(user.uid).catch((e) =>
         console.error("_syncFavoritesFromFirestore error:", e),
       );
+      try {
+        const userSnap = await getDoc(doc(db, "users", user.uid));
+        const userDoc = userSnap.exists() ? userSnap.data() || {} : {};
+        updateAdminMenuVisibility(userDoc);
+      } catch (e) {
+        console.warn("updateAdminMenuVisibility error:", e);
+        updateAdminMenuVisibility({});
+      }
     } else {
+      updateAdminMenuVisibility({});
+      // cleanup live monitor on sign-out
+      if (CURRENT_SESSION_UNSUB) {
+        try {
+          CURRENT_SESSION_UNSUB();
+        } catch (e) {}
+        CURRENT_SESSION_UNSUB = null;
+      }
+      localStorage.removeItem("active_device_session");
       // Clear local favorites for logged-out users
       _saveFavorites({});
     }
@@ -3487,6 +4073,9 @@ function onUserMenuAction(action) {
       break;
     case "favoriteSuppliers":
       showFavoriteSuppliers();
+      break;
+    case "adminDashboard":
+      window.location.href = "admin.html";
       break;
     case "restaurants":
     case "hotels":
@@ -4778,6 +5367,13 @@ loadReviews();
 
   // Registration/Login
   window.toggleRegister = toggleRegister;
+  window.showRegistrationScreen = showRegistrationScreen;
+  window.showLoginScreen = showLoginScreen;
+  window.showPendingScreen = showPendingScreen;
+  window.handleRegisterStep1 = handleRegisterStep1;
+  window.handleRegisterStep2 = handleRegisterStep2;
+  window.handleChoosePlan = handleChoosePlan;
+  window.validateRegisterStep1 = validateRegisterStep1;
   window.doLogout = doLogout;
 
   // Account Panel

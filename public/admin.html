@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>لوحة الإدارة — كنوز العلمة</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="icon" type="image/png" href="logo.png" />
+    <style>
+      :root {
+        --bg: #0a1410;
+        --surface: #121f18;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #e8f5ec;
+        --muted: rgba(232, 245, 236, 0.55);
+        --accent: #3ecf7a;
+        --danger: #e85d5d;
+        --warn: #f0b429;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Nunito", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .admin-shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px 20px 48px;
+      }
+      .admin-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 28px;
+        flex-wrap: wrap;
+      }
+      .admin-header h1 {
+        font-size: 1.5rem;
+        font-weight: 800;
+      }
+      .admin-header p {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 4px;
+      }
+      .header-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .btn {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-family: inherit;
+        font-weight: 700;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.15s;
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn:not(:disabled):hover {
+        transform: translateY(-1px);
+      }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #062010;
+      }
+      .btn-danger {
+        background: rgba(232, 93, 93, 0.15);
+        color: #ff9b9b;
+        border: 1px solid rgba(232, 93, 93, 0.35);
+      }
+      .btn-warn {
+        background: rgba(240, 180, 41, 0.12);
+        color: #ffd56a;
+        border: 1px solid rgba(240, 180, 41, 0.35);
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+      .metric-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+      }
+      .metric-card .label {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      .metric-card .value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .metric-card.pending .value {
+        color: var(--warn);
+      }
+      .metric-card.paid .value {
+        color: var(--accent);
+      }
+      .metric-card.sessions .value {
+        color: #6eb5ff;
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 24px;
+      }
+      .panel h2 {
+        font-size: 1.1rem;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+      }
+      th,
+      td {
+        text-align: right;
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      .receipt-thumb {
+        width: 56px;
+        height: 56px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        background: #1a2a22;
+      }
+      .receipt-thumb:hover {
+        outline: 2px solid var(--accent);
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+      }
+      .badge-baridimob {
+        background: rgba(110, 181, 255, 0.15);
+        color: #8ec8ff;
+      }
+      .badge-ccp {
+        background: rgba(240, 180, 41, 0.15);
+        color: #ffd56a;
+      }
+      .search-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .search-bar input {
+        flex: 1;
+        min-width: 220px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 14px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.9rem;
+      }
+      .search-bar input::placeholder {
+        color: var(--muted);
+      }
+      .empty-row td {
+        text-align: center;
+        color: var(--muted);
+        padding: 28px;
+      }
+      .status-pill {
+        font-size: 0.75rem;
+        font-weight: 800;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .status-paid {
+        background: rgba(62, 207, 122, 0.15);
+        color: var(--accent);
+      }
+      .status-pending {
+        background: rgba(240, 180, 41, 0.15);
+        color: var(--warn);
+      }
+      .status-disabled {
+        background: rgba(232, 93, 93, 0.15);
+        color: #ff9b9b;
+      }
+      .row-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.92);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 24px;
+      }
+      .lightbox.open {
+        display: flex;
+      }
+      .lightbox img {
+        max-width: min(96vw, 900px);
+        max-height: 90vh;
+        border-radius: 12px;
+        object-fit: contain;
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: #fff;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        font-size: 1.2rem;
+        cursor: pointer;
+      }
+      #gateLoader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        z-index: 2000;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      #adminApp.hidden {
+        display: none;
+      }
+      @media (max-width: 640px) {
+        .admin-header h1 {
+          font-size: 1.2rem;
+        }
+        th,
+        td {
+          padding: 10px 6px;
+          font-size: 0.8rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gateLoader">جاري التحقق من الصلاحيات…</div>
+
+    <div id="adminApp" class="admin-shell hidden">
+      <header class="admin-header">
+        <div>
+          <h1><i class="fa-solid fa-shield-halved"></i> لوحة الإدارة</h1>
+          <p id="adminEmail">—</p>
+        </div>
+        <div class="header-actions">
+          <a href="index.html" class="btn btn-ghost" style="text-decoration: none"
+            >الرئيسية</a
+          >
+          <button type="button" class="btn btn-ghost" id="logoutBtn">
+            تسجيل الخروج
+          </button>
+        </div>
+      </header>
+
+      <section class="metrics">
+        <article class="metric-card pending">
+          <div class="label">مشتركين بانتظار الموافقة</div>
+          <div class="value" id="metricPending">0</div>
+        </article>
+        <article class="metric-card paid">
+          <div class="label">مشتركين مدفوعين</div>
+          <div class="value" id="metricPaid">0</div>
+        </article>
+        <article class="metric-card sessions">
+          <div class="label">جلسات نشطة</div>
+          <div class="value" id="metricSessions">0</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2><i class="fa-solid fa-clock"></i> اشتراكات قيد الانتظار</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>اسم التاجر</th>
+                <th>الهاتف</th>
+                <th>طريقة الدفع</th>
+                <th>إيصال الاشتراك</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="pendingTableBody">
+              <tr class="empty-row">
+                <td colspan="5">لا توجد طلبات معلقة</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2><i class="fa-solid fa-users"></i> إدارة المستخدمين</h2>
+        <div class="search-bar">
+          <input
+            type="search"
+            id="userSearchInput"
+            placeholder="بحث بالهاتف أو البريد الإلكتروني…"
+            autocomplete="off"
+          />
+          <button type="button" class="btn btn-ghost" id="userSearchBtn">
+            بحث
+          </button>
+          <button type="button" class="btn btn-ghost" id="userSearchClear">
+            عرض الكل
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>الاسم</th>
+                <th>البريد</th>
+                <th>الهاتف</th>
+                <th>الحالة</th>
+                <th>جلسة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr class="empty-row">
+                <td colspan="6">جاري التحميل…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="lightbox" id="receiptLightbox" aria-hidden="true">
+      <button
+        type="button"
+        class="lightbox-close"
+        id="lightboxClose"
+        aria-label="إغلاق"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <img id="lightboxImage" src="" alt="إيصال الاشتراك" />
+    </div>
+
+    <script type="module" src="admin.js"></script>
+  </body>
+</html>
