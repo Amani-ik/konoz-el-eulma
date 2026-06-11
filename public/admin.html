@@ -215,6 +215,55 @@
       .search-bar input::placeholder {
         color: var(--muted);
       }
+      .status-filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+        align-items: center;
+      }
+      .status-filters-label {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-left: 4px;
+      }
+      .status-filter-btn {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 800;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s, border-color 0.2s;
+      }
+      .status-filter-btn:hover {
+        color: var(--text);
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+      .status-filter-btn.active {
+        color: var(--text);
+        border-color: var(--accent);
+        background: rgba(62, 207, 122, 0.12);
+      }
+      .status-filter-btn[data-status="paid"].active {
+        border-color: var(--accent);
+        background: rgba(62, 207, 122, 0.15);
+        color: var(--accent);
+      }
+      .status-filter-btn[data-status="pending"].active {
+        border-color: var(--warn);
+        background: rgba(240, 180, 41, 0.15);
+        color: #ffd56a;
+      }
+      .status-filter-btn[data-status="disabled"].active {
+        border-color: var(--danger);
+        background: rgba(232, 93, 93, 0.15);
+        color: #ff9b9b;
+      }
       .empty-row td {
         text-align: center;
         color: var(--muted);
@@ -372,6 +421,13 @@
           <button type="button" class="btn btn-ghost" id="userSearchClear">
             عرض الكل
           </button>
+        </div>
+        <div class="status-filters" role="group" aria-label="تصفية حسب الحالة">
+          <span class="status-filters-label">الحالة:</span>
+          <button type="button" class="status-filter-btn active" data-status="">الكل</button>
+          <button type="button" class="status-filter-btn" data-status="paid">مدفوع</button>
+          <button type="button" class="status-filter-btn" data-status="pending">معلق</button>
+          <button type="button" class="status-filter-btn" data-status="disabled">محظور</button>
         </div>
         <div class="table-wrap">
           <table>

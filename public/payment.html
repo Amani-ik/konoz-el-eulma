@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>الدفع ورفع الإيصال — كنوز العلمة</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="logo.png" />
+    <link rel="stylesheet" href="subscription.css" />
+  </head>
+  <body>
+    <div id="loader" class="loader">جاري التحميل…</div>
+
+    <div id="paymentScreen" class="sub-shell hidden">
+      <header class="sub-topbar">
+        <a class="sub-brand" href="index.html">
+          <img src="logo.png" alt="" />
+          <span>كنوز العلمة</span>
+        </a>
+        <button
+          type="button"
+          class="sub-menu"
+          onclick="location.href = 'index.html'"
+          aria-label="القائمة"
+        >
+          ☰
+        </button>
+      </header>
+
+      <nav class="stepper" aria-label="خطوات الاشتراك">
+        <div class="stepper-item done">1. اختر خطتك</div>
+        <div class="stepper-item done">2. اختر الأسواق</div>
+        <div class="stepper-item active">3. رفع الإيصال</div>
+      </nav>
+
+      <div class="step-head">
+        <h1>الخطوة 3: أكمل الدفع</h1>
+        <p>حوّل المبلغ (دفعة واحدة) ثم ارفع إيصال التحويل للمراجعة</p>
+        <span class="sub-badge"> تفعيل دائم للاشتراك </span>
+      </div>
+
+      <div class="summary-card" id="summaryCard">
+        <div class="summary-top">
+          <div>
+            <h3 id="summaryPlan">—</h3>
+            <p
+              style="
+                color: var(--paper-muted);
+                font-size: 0.82rem;
+                margin-top: 4px;
+              "
+            >
+              اشتراك دائم
+            </p>
+          </div>
+          <div class="price" id="summaryPrice">—</div>
+        </div>
+        <div class="chip-row" id="summaryDistricts"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">بيانات الدفع</div>
+        <div class="copy-field">
+          <label>CCP</label>
+          <code id="ccpNumber">37233694525777</code>
+          <button
+            type="button"
+            class="copy-btn"
+            data-copy="ccpNumber"
+            title="نسخ"
+          >
+            ⧉
+          </button>
+        </div>
+        <div class="copy-field">
+          <label>Baridimob</label>
+          <code id="baridiRip">S483823002W00000</code>
+          <button
+            type="button"
+            class="copy-btn"
+            data-copy="baridiRip"
+            title="نسخ"
+          >
+            ⧉
+          </button>
+        </div>
+        <div class="copy-field">
+          <label>الحساب</label>
+          <code id="accountHolder">كنوز العلمة</code>
+          <button
+            type="button"
+            class="copy-btn"
+            data-copy="accountHolder"
+            title="نسخ"
+          >
+            ⧉
+          </button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title">رفع الإيصال</div>
+        <label class="upload-box" id="dropzone" for="receiptInput">
+          <div class="upload-label">رفع الإيصال</div>
+          <div class="upload-hint">صورة فقط — JPG, PNG, WEBP</div>
+          <img
+            class="upload-preview hidden"
+            id="previewImg"
+            alt="معاينة الإيصال"
+          />
+        </label>
+        <input
+          type="file"
+          id="receiptInput"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          hidden
+        />
+
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="progressFile">—</span>
+            <span id="progressPct">0%</span>
+          </div>
+        </div>
+
+        <button type="button" class="primary-btn" id="submitBtn" disabled>
+          <span class="spinner"></span>
+          <span id="submitLabel">ارفع الإيصال للمراجعة</span>
+        </button>
+        <p class="error-msg" id="errorMsg"></p>
+      </div>
+
+      <a href="pricing.html" class="back-link">← العودة لاختيار الخطة</a>
+    </div>
+
+    <div id="awaitingScreen" class="sub-shell hidden">
+      <div class="awaiting-wrap">
+        <div class="icon">⏳</div>
+        <h2>في انتظار الموافقة</h2>
+        <p
+          style="
+            color: var(--paper-muted);
+            max-width: 420px;
+            margin: 12px auto 0;
+          "
+        >
+          تم استلام إيصال الدفع. سيتم مراجعته من الإدارة وستتمكن من الدخول بعد
+          تفعيل اشتراكك الدائم.
+        </p>
+        <a href="index.html" class="back-link">العودة للصفحة الرئيسية</a>
+      </div>
+    </div>
+
+    <script type="module" src="payment.js"></script>
+  </body>
+</html>

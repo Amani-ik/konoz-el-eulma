@@ -36,6 +36,7 @@ const lightboxClose = document.getElementById("lightboxClose");
 let unsubscribers = [];
 let allUsersCache = [];
 let searchFilter = "";
+let statusFilter = "";
 
 function hideGate() {
   if (gateLoader) gateLoader.style.display = "none";
@@ -88,6 +89,11 @@ function accountStatus(data = {}) {
   return "paid";
 }
 
+function isSessionActive(data = {}) {
+  const value = data.isSessionActive;
+  return value === true || value === "true" || value === 1;
+}
+
 function statusPill(status = "") {
   const s = String(status || "paid").toLowerCase();
   if (s === "pending") return `<span class="status-pill status-pending">معلق</span>`;
@@ -126,7 +132,8 @@ function closeLightbox() {
 }
 
 function renderPendingRow(id, data) {
-  const receiptUrl = data.receiptUrl || data.receipt || "";
+  const receiptUrl =
+    data.submittedReceiptUrl || data.receiptUrl || data.receipt || "";
   const safeReceipt = escapeHtml(receiptUrl);
   const thumb = receiptUrl
     ? `<img class="receipt-thumb" src="${safeReceipt}" alt="إيصال" data-receipt="${safeReceipt}" />`
@@ -168,10 +175,21 @@ function matchesSearch(data, term) {
   return haystack.includes(term.toLowerCase());
 }
 
+function matchesStatusFilter(data) {
+  if (!statusFilter) return true;
+  return accountStatus(data) === statusFilter;
+}
+
+function filterUsers(users) {
+  return users.filter(
+    ({ data }) => matchesSearch(data, searchFilter) && matchesStatusFilter(data),
+  );
+}
+
 function renderUsersTable(users) {
   if (!usersTableBody) return;
 
-  const filtered = users.filter(({ data }) => matchesSearch(data, searchFilter));
+  const filtered = filterUsers(users);
 
   if (!filtered.length) {
     usersTableBody.innerHTML = `
@@ -182,7 +200,16 @@ function renderUsersTable(users) {
 
   usersTableBody.innerHTML = filtered
     .map(({ id, data }) => {
-      const sessionActive = data.isSessionActive === true;
+      const sessionActive = isSessionActive(data);
+      const isDisabled = accountStatus(data) === "disabled";
+      const isTargetAdmin =
+        String(data.role || "").trim().toLowerCase() === "admin";
+      const accountToggleBtn = isTargetAdmin
+        ? ""
+        : isDisabled
+          ? `<button type="button" class="btn btn-primary btn-enable-account" data-uid="${escapeHtml(id)}">تفعيل الحساب</button>`
+          : `<button type="button" class="btn btn-danger btn-block-account" data-uid="${escapeHtml(id)}">حظر الحساب</button>`;
+
       return `
         <tr data-uid="${escapeHtml(id)}">
           <td>${escapeHtml(merchantName(data))}</td>
@@ -195,9 +222,7 @@ function renderUsersTable(users) {
               <button type="button" class="btn btn-warn btn-reset-session" data-uid="${escapeHtml(id)}" ${sessionActive ? "" : "disabled"}>
                 إعادة الجلسة
               </button>
-              <button type="button" class="btn btn-danger btn-block-account" data-uid="${escapeHtml(id)}" ${accountStatus(data) === "disabled" ? "disabled" : ""}>
-                حظر الحساب
-              </button>
+              ${accountToggleBtn}
             </div>
           </td>
         </tr>
@@ -207,29 +232,51 @@ function renderUsersTable(users) {
 }
 
 async function approveUser(userId, userData) {
-  const receiptUrl = userData.receiptUrl || userData.receipt || "";
+  const receiptUrl =
+    userData.submittedReceiptUrl || userData.receiptUrl || userData.receipt || "";
   const paymentMethod = userData.paymentMethod || "";
+  const amount = Number(userData.requestedPrice) || SUBSCRIPTION_AMOUNT;
+  const planId = userData.requestedPlan || "";
+  const planName = userData.requestedPlanName || planId;
+  const districts = userData.requestedDistricts || [];
+  const pendingPaymentId = userData.pendingPaymentId || "";
 
   const batch = writeBatch(db);
   const userRef = doc(db, "users", userId);
-  const paymentRef = doc(collection(db, "users", userId, "payments"));
+  const paymentRef = pendingPaymentId
+    ? doc(db, "users", userId, "payments", pendingPaymentId)
+    : doc(collection(db, "users", userId, "payments"));
 
   batch.update(userRef, {
     status: "paid",
     activatedAt: serverTimestamp(),
     subscriptionExpiryDate: subscriptionExpiryTimestamp(),
+    submittedReceiptUrl: deleteField(),
+    requestedPlan: deleteField(),
+    requestedPrice: deleteField(),
+    requestedDistricts: deleteField(),
+    receiptSubmittedAt: deleteField(),
+    pendingPaymentId: deleteField(),
     receiptUrl: deleteField(),
     paymentMethod: deleteField(),
     updated_at: serverTimestamp(),
   });
 
-  batch.set(paymentRef, {
-    receiptUrl,
-    paymentMethod,
-    approvedAt: serverTimestamp(),
-    amount: SUBSCRIPTION_AMOUNT,
-    status: "approved",
-  });
+  batch.set(
+    paymentRef,
+    {
+      receiptUrl,
+      paymentMethod,
+      planId,
+      planName,
+      districts,
+      approvedAt: serverTimestamp(),
+      amount,
+      status: "approved",
+      subscriptionType: userData.subscriptionType || "monthly_one_time",
+    },
+    { merge: true },
+  );
 
   await batch.commit();
 }
@@ -245,15 +292,32 @@ async function resetSession(userId) {
   await batch.commit();
 }
 
-async function blockAccount(userId) {
+async function setAccountDisabled(userId, disabled) {
   const userRef = doc(db, "users", userId);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) throw new Error("User not found.");
+
+  const userData = snap.data() || {};
+  if (String(userData.role || "").trim().toLowerCase() === "admin") {
+    throw new Error("Cannot modify admin accounts.");
+  }
+
   const batch = writeBatch(db);
-  batch.update(userRef, {
-    status: "disabled",
+  const update = {
     isSessionActive: false,
     currentSessionId: "",
     updated_at: serverTimestamp(),
-  });
+  };
+
+  if (disabled) {
+    update.status = "disabled";
+    update.statusBeforeDisable = accountStatus(userData);
+  } else {
+    update.status = userData.statusBeforeDisable || "paid";
+    update.statusBeforeDisable = deleteField();
+  }
+
+  batch.update(userRef, update);
   await batch.commit();
 }
 
@@ -287,6 +351,7 @@ function bindTableActions() {
     if (resetBtn) {
       const uid = resetBtn.dataset.uid;
       if (!uid || resetBtn.disabled) return;
+      if (!confirm("إنهاء الجلسة النشطة لهذا المستخدم؟")) return;
       resetBtn.disabled = true;
       try {
         await resetSession(uid);
@@ -305,11 +370,27 @@ function bindTableActions() {
       if (!confirm("حظر هذا الحساب؟")) return;
       blockBtn.disabled = true;
       try {
-        await blockAccount(uid);
+        await setAccountDisabled(uid, true);
       } catch (err) {
-        console.error("blockAccount:", err);
+        console.error("setAccountDisabled (block):", err);
         alert("تعذر حظر الحساب.");
         blockBtn.disabled = false;
+      }
+      return;
+    }
+
+    const enableBtn = e.target.closest(".btn-enable-account");
+    if (enableBtn) {
+      const uid = enableBtn.dataset.uid;
+      if (!uid || enableBtn.disabled) return;
+      if (!confirm("تفعيل هذا الحساب؟")) return;
+      enableBtn.disabled = true;
+      try {
+        await setAccountDisabled(uid, false);
+      } catch (err) {
+        console.error("setAccountDisabled (enable):", err);
+        alert("تعذر تفعيل الحساب.");
+        enableBtn.disabled = false;
       }
       return;
     }
@@ -326,7 +407,7 @@ function applyUsersSnapshot(users) {
 
   const pending = users.filter(({ data }) => accountStatus(data) === "pending");
   const paid = users.filter(({ data }) => accountStatus(data) === "paid");
-  const sessions = users.filter(({ data }) => data.isSessionActive === true);
+  const sessions = users.filter(({ data }) => isSessionActive(data));
 
   if (metricPending) metricPending.textContent = String(pending.length);
   if (metricPaid) metricPaid.textContent = String(paid.length);
@@ -356,6 +437,14 @@ function startListeners() {
   );
 }
 
+function setStatusFilter(value) {
+  statusFilter = value || "";
+  document.querySelectorAll(".status-filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", (btn.dataset.status || "") === statusFilter);
+  });
+  renderUsersTable(allUsersCache);
+}
+
 function bindSearch() {
   const applySearch = () => {
     searchFilter = userSearchInput?.value.trim() || "";
@@ -369,7 +458,13 @@ function bindSearch() {
   userSearchClear?.addEventListener("click", () => {
     if (userSearchInput) userSearchInput.value = "";
     searchFilter = "";
-    renderUsersTable(allUsersCache);
+    setStatusFilter("");
+  });
+
+  document.querySelectorAll(".status-filter-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setStatusFilter(btn.dataset.status || "");
+    });
   });
 }
 

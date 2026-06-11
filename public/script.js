@@ -66,6 +66,48 @@ function updateAdminMenuVisibility(userDoc = {}) {
   item.hidden = !isStrictAdmin(userDoc);
 }
 
+function isSessionActiveField(userDoc = {}) {
+  const value = userDoc.isSessionActive;
+  return value === true || value === "true" || value === 1;
+}
+
+async function ensureActiveSession(userId) {
+  if (!userId) return;
+  try {
+    const userDocRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userDocRef);
+    const userDoc = userSnap.exists() ? userSnap.data() || {} : {};
+    if (isAdminUser(userDoc)) return;
+
+    const accountStatus = getUserAccountStatus(userDoc);
+    if (accountStatus !== "paid") return;
+
+    const localId = localStorage.getItem("active_device_session") || "";
+    const remoteId = String(userDoc.currentSessionId || "");
+    const remoteActive = isSessionActiveField(userDoc);
+
+    if (remoteActive && remoteId && remoteId === localId) {
+      startSessionMonitor(userId);
+      return;
+    }
+
+    const sessionToken = generateSessionToken();
+    localStorage.setItem("active_device_session", sessionToken);
+    await setDoc(
+      userDocRef,
+      {
+        isSessionActive: true,
+        currentSessionId: sessionToken,
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    startSessionMonitor(userId);
+  } catch (err) {
+    console.error("ensureActiveSession error:", err);
+  }
+}
+
 async function startSessionMonitor(userId) {
   try {
     if (!userId) return;
@@ -84,10 +126,10 @@ async function startSessionMonitor(userId) {
       if (!snap.exists()) return;
       const data = snap.data() || {};
       if (isAdminUser(data)) return;
-      const isActive = data.isSessionActive === true;
+      const isActive = isSessionActiveField(data);
       const currentId = data.currentSessionId || "";
       const localId = localStorage.getItem("active_device_session") || "";
-      if (isActive && currentId && currentId !== localId) {
+      if (isActive && currentId && localId && currentId !== localId) {
         try {
           alert(
             "🔒 Security Alert: This account has been logged in from another device. Your session here will be terminated.",
@@ -239,16 +281,8 @@ function validateLoginForm() {
 }
 
 const LOGIN_RATE_LIMIT_KEY = "login_rate_limit";
-const SIGNUP_DAILY_LIMIT_KEY = "signup_last_attempt_date";
 const LOGIN_MAX_FAILURES = 3;
 const LOGIN_BLOCK_MS = 15 * 60 * 1000;
-
-function _getLocalDateKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
 
 function _readLoginRateLimit() {
   try {
@@ -310,20 +344,6 @@ function _isLoginFailureError(code) {
 function _getLoginBlockedMessage(blockedUntil) {
   const mins = Math.max(1, Math.ceil((blockedUntil - Date.now()) / 60000));
   return `تم حظر تسجيل الدخول مؤقتاً بعد 3 محاولات فاشلة. يرجى المحاولة بعد ${mins} دقيقة.`;
-}
-
-function _canAttemptSignupToday() {
-  try {
-    return localStorage.getItem(SIGNUP_DAILY_LIMIT_KEY) !== _getLocalDateKey();
-  } catch (e) {
-    return true;
-  }
-}
-
-function _recordSignupAttemptToday() {
-  try {
-    localStorage.setItem(SIGNUP_DAILY_LIMIT_KEY, _getLocalDateKey());
-  } catch (e) {}
 }
 
 // الدالة الرئيسية لتسجيل الدخول
@@ -405,26 +425,7 @@ async function handleLogin() {
       }
 
       if (!isAdmin) {
-        // Claim session for this device; any other active session is superseded
-        // (startSessionMonitor on the old device will detect the change and sign out)
-        const sessionToken = generateSessionToken();
-        localStorage.setItem("active_device_session", sessionToken);
-        await setDoc(
-          userDocRef,
-          {
-            isSessionActive: true,
-            currentSessionId: sessionToken,
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-
-        // Start live monitor to detect remote claims
-        try {
-          startSessionMonitor(user.uid);
-        } catch (e) {
-          console.error("Failed to start session monitor:", e);
-        }
+        await ensureActiveSession(user.uid);
       }
     } catch (err) {
       console.error("Session check error:", err);
@@ -1268,13 +1269,6 @@ async function handleRegisterStep1() {
     return;
   }
 
-  if (!_canAttemptSignupToday()) {
-    if (errorEl)
-      errorEl.textContent =
-        "لقد استخدمت محاولة التسجيل المسموحة لهذا اليوم. يرجى المحاولة غداً.";
-    return;
-  }
-
   const originalText = nextBtn?.textContent || "التالي";
   if (nextBtn) {
     nextBtn.disabled = true;
@@ -1284,7 +1278,6 @@ async function handleRegisterStep1() {
   if (errorEl) errorEl.textContent = "";
 
   try {
-    _recordSignupAttemptToday();
     await createUserWithEmailAndPassword(auth, email, password);
 
     const step1 = document.getElementById("regStep1");
@@ -1383,12 +1376,17 @@ async function handleRegisterStep2() {
 }
 
 function handleChoosePlan() {
+  handleChoosePlanAsync();
+}
+
+async function handleChoosePlanAsync() {
   const email = document.getElementById("regEmail").value.trim();
   const username = document.getElementById("regUsername").value.trim();
   const fullName = document.getElementById("regFullName").value.trim();
   const phone = document.getElementById("regPhone").value.trim();
   const dob = document.getElementById("regDob").value;
   const errorEl = document.getElementById("registerError");
+  const planBtn = document.getElementById("planBtn");
 
   if (!username || !fullName || !phone || !dob) {
     if (errorEl)
@@ -1397,18 +1395,59 @@ function handleChoosePlan() {
     return;
   }
 
+  const user = auth.currentUser;
+  if (!user) {
+    if (errorEl)
+      errorEl.textContent =
+        "لم يتم العثور على حساب مسجل، يرجى إعادة التسجيل من البداية.";
+    return;
+  }
+
+  const originalText = planBtn?.textContent || "اختر خطتك";
+  if (planBtn) {
+    planBtn.disabled = true;
+    planBtn.style.opacity = "0.6";
+    planBtn.textContent = "جاري التحضير...";
+  }
   if (errorEl) errorEl.textContent = "";
-  const phoneNumber = "213699173103";
-  const text = encodeURIComponent(
-    `مرحباً، أود اختيار خطتي وطريقة الدفع.\n\n` +
-      `البريد الإلكتروني: ${email}\n` +
-      `اسم المستخدم: ${username}\n` +
-      `الاسم الكامل: ${fullName}\n` +
-      `رقم الهاتف: ${phone}\n` +
-      `تاريخ الميلاد: ${dob}`,
-  );
-  const url = `https://wa.me/${phoneNumber}?text=${text}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+
+  try {
+    const normalizedPhone = _normalizePhoneForStorage(phone);
+    const userDocRef = doc(db, "users", user.uid);
+    await setDoc(
+      userDocRef,
+      {
+        uid: user.uid,
+        email: user.email || email,
+        username,
+        fullName,
+        "full name": fullName,
+        phone: normalizedPhone,
+        dob,
+        dateOfBirth: dob,
+        role: "client",
+        status: "pending",
+        location: "-",
+        created_at: serverTimestamp(),
+        "created at": serverTimestamp(),
+        updated_at: serverTimestamp(),
+        isSessionActive: false,
+        currentSessionId: "",
+      },
+      { merge: true },
+    );
+
+    window.location.href = "payment.html";
+  } catch (error) {
+    console.error("Choose plan error:", error);
+    if (errorEl)
+      errorEl.textContent = "تعذر حفظ بياناتك، يرجى المحاولة مرة أخرى.";
+    if (planBtn) {
+      planBtn.disabled = false;
+      planBtn.style.opacity = "1";
+      planBtn.textContent = originalText;
+    }
+  }
 }
 
 function toggleRegister() {
@@ -2764,8 +2803,10 @@ try {
     console.log("onAuthStateChanged ->", user && user.uid ? user.uid : user);
     if (user) {
       try {
-        startSessionMonitor(user.uid);
-      } catch (e) {}
+        await ensureActiveSession(user.uid);
+      } catch (e) {
+        console.error("ensureActiveSession on auth change:", e);
+      }
       _syncFavoritesFromFirestore(user.uid).catch((e) =>
         console.error("_syncFavoritesFromFirestore error:", e),
       );
