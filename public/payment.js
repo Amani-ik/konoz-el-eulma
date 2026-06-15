@@ -1,20 +1,14 @@
-import { auth, db, storage } from "./firebase-config.js";
-import {
-  onAuthStateChanged,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { auth, db } from "./firebase-config.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   doc,
-  collection,
-  writeBatch,
+  setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSubscriptionConfig } from "./subscription-service.js";
+
+const IMGBB_API_KEY = "29196fd8a8c93bfe9a10588fdf414372";
+const IMGBB_UPLOAD_URL = "https://api.imgbb.com/1/upload";
 
 const SESSION_KEYS = [
   "finalPlanId",
@@ -39,6 +33,8 @@ const progressWrap = document.getElementById("progressWrap");
 const progressFill = document.getElementById("progressFill");
 const progressFile = document.getElementById("progressFile");
 const progressPct = document.getElementById("progressPct");
+const otherMethodsToggle = document.getElementById("otherMethodsToggle");
+const otherMethodsPanel = document.getElementById("otherMethodsPanel");
 
 let planLabels = {};
 let selectedFile = null;
@@ -104,6 +100,11 @@ function renderPaymentDetails(payment) {
   document.getElementById("ccpNumber").textContent = payment.ccp || "—";
   document.getElementById("baridiRip").textContent = payment.baridimob || "—";
   document.getElementById("accountHolder").textContent = payment.holder || "—";
+
+  const redotpayEl = document.getElementById("redotpayId");
+  if (redotpayEl) {
+    redotpayEl.textContent = payment.redotpay || "—";
+  }
 }
 
 function renderSummary(data) {
@@ -143,6 +144,18 @@ function bindCopyButtons() {
         errorMsg.textContent = "تعذر نسخ النص.";
       }
     });
+  });
+}
+
+function bindOtherMethodsToggle() {
+  if (!otherMethodsToggle || !otherMethodsPanel) return;
+
+  otherMethodsToggle.addEventListener("click", () => {
+    const isHidden = otherMethodsPanel.classList.contains("hidden");
+    otherMethodsPanel.classList.toggle("hidden");
+    otherMethodsToggle.textContent = isHidden
+      ? "إخفاء طرق الدفع الأخرى ▴"
+      : "عرض طرق الدفع الأخرى ▾";
   });
 }
 
@@ -200,32 +213,65 @@ function bindUploadUI() {
   });
 }
 
-function uploadReceipt(userId, file) {
-  const timestamp = Date.now();
-  const storagePath = `receipts/${userId}/${timestamp}_receipt.jpg`;
-  const storageRef = ref(storage, storagePath);
-
+function fileToBase64(file) {
   return new Promise((resolve, reject) => {
-    const task = uploadBytesResumable(storageRef, file, {
-      contentType: file.type || "image/jpeg",
-    });
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      const base64 = result.split(",")[1] || result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
-    task.on(
-      "state_changed",
-      (snap) => {
-        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+function uploadReceipt(userId, file) {
+  return new Promise(async (resolve, reject) => {
+    let base64;
+    try {
+      base64 = await fileToBase64(file);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("key", IMGBB_API_KEY);
+    formData.append("image", base64);
+    formData.append("name", `receipt_${userId}_${Date.now()}`);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", IMGBB_UPLOAD_URL);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
         setUploadProgress(pct, file.name);
-      },
-      reject,
-      async () => {
-        try {
-          const url = await getDownloadURL(task.snapshot.ref);
-          resolve(url);
-        } catch (err) {
-          reject(err);
+      }
+    };
+
+    xhr.onload = () => {
+      try {
+        const res = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && res.success) {
+          resolve({
+            url: res.data.url,
+            displayUrl: res.data.display_url || res.data.url,
+            deleteUrl: res.data.delete_url || null,
+            thumbUrl: res.data.thumb?.url || null,
+          });
+        } else {
+          reject(new Error(res.error?.message || "ImgBB upload failed"));
         }
-      },
-    );
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+
+    xhr.send(formData);
   });
 }
 
@@ -238,58 +284,38 @@ async function submitForApproval(user) {
   errorMsg.textContent = "";
 
   try {
-    const receiptUrl = await uploadReceipt(user.uid, selectedFile);
+    const upload = await uploadReceipt(user.uid, selectedFile);
+    const receiptUrl = upload.url;
     setUploadProgress(100, selectedFile.name);
 
     const userRef = doc(db, "users", user.uid);
-    const paymentRef = doc(collection(db, "users", user.uid, "payments"));
     const planName =
       checkoutData.finalPlanName || planLabel(checkoutData.finalPlanId);
 
-    const batch = writeBatch(db);
-
-    batch.set(
+    await setDoc(
       userRef,
       {
         status: "pending",
         requestedPlan: checkoutData.finalPlanId,
+        requestedPlanName: planName,
         requestedPrice: Number(checkoutData.finalPrice),
         requestedDistricts: checkoutData.finalDistricts,
         submittedReceiptUrl: receiptUrl,
+        receiptThumbUrl: upload.thumbUrl || null,
         receiptSubmittedAt: serverTimestamp(),
-        pendingPaymentId: paymentRef.id,
-        subscriptionType: "monthly_one_time",
         updated_at: serverTimestamp(),
       },
       { merge: true },
     );
 
-    batch.set(paymentRef, {
-      receiptUrl,
-      planId: checkoutData.finalPlanId,
-      planName,
-      amount: Number(checkoutData.finalPrice),
-      districts: checkoutData.finalDistricts,
-      status: "pending",
-      subscriptionType: "monthly_one_time",
-      submittedAt: serverTimestamp(),
-    });
-
-    await batch.commit();
-
     clearCheckoutSession();
-
-    try {
-      await signOut(auth);
-    } catch (_) {}
-
-    showScreen("awaiting");
+    window.location.replace("pending.html");
   } catch (err) {
     console.error("Payment submission failed:", err);
-    errorMsg.textContent = "فشل رفع الإيصال. يرجى المحاولة مرة أخرى.";
+    errorMsg.textContent = "فشل رفع الإيصال في السيرفر: " + err.message;
     submitBtn.disabled = false;
     submitBtn.classList.remove("loading");
-    submitLabel.textContent = "Submit for Approval";
+    submitLabel.textContent = "ارفع الإيصال للمراجعة";
   }
 }
 
@@ -311,6 +337,7 @@ async function initPaymentPage(user) {
 
   renderSummary(checkoutData);
   bindCopyButtons();
+  bindOtherMethodsToggle();
   bindUploadUI();
   submitBtn.addEventListener("click", () => submitForApproval(user));
   showScreen("payment");

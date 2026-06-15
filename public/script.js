@@ -3,6 +3,7 @@ import { initLoginFields, clearLoginFields } from "./login-fields.js";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
   sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
@@ -1273,12 +1274,26 @@ async function handleRegisterStep1() {
   if (nextBtn) {
     nextBtn.disabled = true;
     nextBtn.style.opacity = "0.6";
-    nextBtn.textContent = "جاري إنشاء الحساب...";
+    nextBtn.textContent = "جاري التحقق...";
   }
   if (errorEl) errorEl.textContent = "";
 
   try {
-    await createUserWithEmailAndPassword(auth, email, password);
+    // NOTE: We no longer create the Firebase Auth account here.
+    // Account creation is deferred until after the payment receipt
+    // is successfully submitted (see payment.js / submitForApproval).
+    // We only check here whether the email is already registered so
+    // the user gets immediate feedback.
+    const emailTaken = await isEmailAlreadyRegistered(email);
+    if (emailTaken) {
+      if (errorEl)
+        errorEl.textContent = "هذا البريد الإلكتروني مستخدم مسبقاً.";
+      return;
+    }
+
+    // Stash credentials temporarily for use after payment is approved.
+    sessionStorage.setItem("pendingEmail", email);
+    sessionStorage.setItem("pendingPassword", password);
 
     const step1 = document.getElementById("regStep1");
     const step2 = document.getElementById("regStep2");
@@ -1288,7 +1303,7 @@ async function handleRegisterStep1() {
       regStep = 2;
     }
   } catch (error) {
-    console.error("Registration auth error:", error);
+    console.error("Registration step1 error:", error);
     if (errorEl) errorEl.textContent = getRegisterAuthErrorMessage(error);
   } finally {
     if (nextBtn) {
@@ -1298,80 +1313,18 @@ async function handleRegisterStep1() {
   }
 }
 
-async function handleRegisterStep2() {
-  const email = document.getElementById("regEmail").value.trim();
-  const username = document.getElementById("regUsername").value.trim();
-  const fullName = document.getElementById("regFullName").value.trim();
-  const phone = document.getElementById("regPhone").value.trim();
-  const dob = document.getElementById("regDob").value;
-  const errorEl = document.getElementById("registerError");
-  const step2Btn = document.getElementById("regStep2Btn");
-
-  if (!username || !fullName || !phone || !dob) {
-    if (errorEl)
-      errorEl.textContent = "يرجى إدخال جميع المعلومات المطلوبة للمتابعة.";
-    return;
-  }
-
-  const user = auth.currentUser;
-  if (!user) {
-    if (errorEl)
-      errorEl.textContent =
-        "لم يتم العثور على حساب مسجل، يرجى إعادة التسجيل من البداية.";
-    return;
-  }
-
-  const originalText = step2Btn?.textContent || "التالي";
-  if (step2Btn) {
-    step2Btn.disabled = true;
-    step2Btn.style.opacity = "0.6";
-    step2Btn.textContent = "جاري الحفظ...";
-  }
-  if (errorEl) errorEl.textContent = "";
-
+/**
+ * Checks if an email is already registered, without creating an account.
+ * Uses Firebase Auth's fetchSignInMethodsForEmail.
+ */
+async function isEmailAlreadyRegistered(email) {
   try {
-    const normalizedPhone = _normalizePhoneForStorage(phone);
-    const userDocRef = doc(db, "users", user.uid);
-    const userData = {
-      uid: user.uid,
-      email: user.email || email,
-      username,
-      fullName,
-      "full name": fullName,
-      phone: normalizedPhone,
-      dob,
-      dateOfBirth: dob,
-      role: "client",
-      status: "pending",
-      location: "-",
-      created_at: serverTimestamp(),
-      "created at": serverTimestamp(),
-      updated_at: serverTimestamp(),
-      isSessionActive: false,
-      currentSessionId: "",
-    };
-
-    await setDoc(userDocRef, userData);
-
-    try {
-      await signOut(auth);
-    } catch (signOutError) {
-      console.warn("Sign out after registration failed:", signOutError);
-    }
-
-    resetRegistrationState();
-    showPendingScreen();
-  } catch (error) {
-    console.error("Registration Firestore error:", error);
-    if (errorEl)
-      errorEl.textContent =
-        "تعذر حفظ بياناتك، يرجى المحاولة مرة أخرى.";
-  } finally {
-    if (step2Btn) {
-      step2Btn.disabled = false;
-      step2Btn.style.opacity = "1";
-      step2Btn.textContent = originalText;
-    }
+    const methods = await fetchSignInMethodsForEmail(auth, email);
+    return Array.isArray(methods) && methods.length > 0;
+  } catch (err) {
+    console.warn("isEmailAlreadyRegistered check failed:", err);
+    // Fail open: let Firestore/Auth creation later surface the real error
+    return false;
   }
 }
 
@@ -1380,7 +1333,6 @@ function handleChoosePlan() {
 }
 
 async function handleChoosePlanAsync() {
-  const email = document.getElementById("regEmail").value.trim();
   const username = document.getElementById("regUsername").value.trim();
   const fullName = document.getElementById("regFullName").value.trim();
   const phone = document.getElementById("regPhone").value.trim();
@@ -1395,11 +1347,12 @@ async function handleChoosePlanAsync() {
     return;
   }
 
-  const user = auth.currentUser;
-  if (!user) {
+  const pendingEmail = sessionStorage.getItem("pendingEmail");
+  const pendingPassword = sessionStorage.getItem("pendingPassword");
+  if (!pendingEmail || !pendingPassword) {
     if (errorEl)
       errorEl.textContent =
-        "لم يتم العثور على حساب مسجل، يرجى إعادة التسجيل من البداية.";
+        "لم يتم العثور على بيانات التسجيل، يرجى إعادة التسجيل من البداية.";
     return;
   }
 
@@ -1413,31 +1366,17 @@ async function handleChoosePlanAsync() {
 
   try {
     const normalizedPhone = _normalizePhoneForStorage(phone);
-    const userDocRef = doc(db, "users", user.uid);
-    await setDoc(
-      userDocRef,
-      {
-        uid: user.uid,
-        email: user.email || email,
-        username,
-        fullName,
-        "full name": fullName,
-        phone: normalizedPhone,
-        dob,
-        dateOfBirth: dob,
-        role: "client",
-        status: "pending",
-        location: "-",
-        created_at: serverTimestamp(),
-        "created at": serverTimestamp(),
-        updated_at: serverTimestamp(),
-        isSessionActive: false,
-        currentSessionId: "",
-      },
-      { merge: true },
-    );
 
-    window.location.href = "payment.html";
+    // NOTE: No Firestore/Auth account exists yet. We stash the
+    // registration profile fields in sessionStorage; they will be
+    // written to Firestore together with the new Auth account only
+    // after a successful payment receipt submission (see payment.js).
+    sessionStorage.setItem("pendingUsername", username);
+    sessionStorage.setItem("pendingFullName", fullName);
+    sessionStorage.setItem("pendingPhone", normalizedPhone);
+    sessionStorage.setItem("pendingDob", dob);
+
+    window.location.href = "pricing.html";
   } catch (error) {
     console.error("Choose plan error:", error);
     if (errorEl)
@@ -5412,7 +5351,6 @@ loadReviews();
   window.showLoginScreen = showLoginScreen;
   window.showPendingScreen = showPendingScreen;
   window.handleRegisterStep1 = handleRegisterStep1;
-  window.handleRegisterStep2 = handleRegisterStep2;
   window.handleChoosePlan = handleChoosePlan;
   window.validateRegisterStep1 = validateRegisterStep1;
   window.doLogout = doLogout;

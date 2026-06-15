@@ -19,18 +19,23 @@ service cloud.firestore {
     function isOwner(userId) {
       return signedIn() && request.auth.uid == userId;
     }
+    function ownerUpdateKeepsProtectedFields() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return after.status == before.status
+        && after.role == before.role
+        && after.requestedPlan == before.requestedPlan
+        && after.requestedPrice == before.requestedPrice
+        && after.requestedDistricts == before.requestedDistricts;
+    }
 
     // Users collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow update: if isAdmin()
+        || (isOwner(userId) && ownerUpdateKeepsProtectedFields());
       allow delete: if false;
-
-      match /payments/{paymentId} {
-        allow read, create: if isAdmin();
-        allow update, delete: if false;
-      }
     }
 
     // Reviews collection
@@ -45,6 +50,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update, delete: if signedIn()
         && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Config collection: public read-only access (plans, pricing, payment details)
+    match /config/{configId} {
+      allow read: if true;
     }
 
     // News collection: public read-only access

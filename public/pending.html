@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>قيد المراجعة — كنوز العلمة</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Cinzel:wght@700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" type="image/png" href="logo.png" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="#0b2214" />
+    <link rel="apple-touch-icon" href="logo.png" />
+  </head>
+  <body>
+    <!-- ═══ PENDING APPROVAL ═══ -->
+    <div class="screen" id="pendingScreen">
+      <div class="lcard">
+        <span class="globe">⏳</span>
+        <div class="rtitle">كنوز العلمة</div>
+        <div class="rsub">حسابك قيد المراجعة</div>
+        <p
+          style="
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 14px;
+            line-height: 1.7;
+            margin: 22px 0 8px;
+            font-weight: 600;
+          "
+        >
+          شكراً لتسجيلك! تم استلام طلبك بنجاح.<br />
+          سيتم مراجعته من قبل الإدارة وستتمكن من الدخول بعد الموافقة.
+        </p>
+        <button class="ebtn" id="backToLoginBtn" style="margin-top: 16px;" onclick="window.location.replace('login.html')">
+          العودة إلى تسجيل الدخول
+        </button>
+      </div>
+    </div>
+  </body>
+</html>
