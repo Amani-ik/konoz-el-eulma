@@ -15,6 +15,12 @@ const SESSION_KEYS = [
   "finalPrice",
   "finalPlanName",
   "finalDistricts",
+  "pendingEmail",
+  "pendingPassword",
+  "pendingUsername",
+  "pendingFullName",
+  "pendingPhone",
+  "pendingDob",
 ];
 
 const loader = document.getElementById("loader");
@@ -63,7 +69,7 @@ function districtLabel(item) {
 function planLabel(planId) {
   return (
     planLabels[planId] ||
-    sessionStorage.getItem("finalPlanName") ||
+    localStorage.getItem("finalPlanName") ||
     planId ||
     "—"
   );
@@ -76,17 +82,17 @@ function formatPrice(price) {
 }
 
 function clearCheckoutSession() {
-  SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
+  SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
 }
 
 function readCheckoutSession() {
-  const finalPlanId = sessionStorage.getItem("finalPlanId");
+  const finalPlanId = localStorage.getItem("finalPlanId");
   if (!finalPlanId) return null;
   return {
     finalPlanId,
-    finalPlanName: sessionStorage.getItem("finalPlanName") || "",
-    finalPrice: sessionStorage.getItem("finalPrice") || "0",
-    finalDistricts: parseDistricts(sessionStorage.getItem("finalDistricts")),
+    finalPlanName: localStorage.getItem("finalPlanName") || "",
+    finalPrice: localStorage.getItem("finalPrice") || "0",
+    finalDistricts: parseDistricts(localStorage.getItem("finalDistricts")),
   };
 }
 
@@ -343,10 +349,29 @@ async function initPaymentPage(user) {
   showScreen("payment");
 }
 
+// Same grace-period guard as pricing.js: avoid bouncing to index.html on a
+// transient `user = null` callback right after a fresh navigation on a
+// deployed (non-localhost) origin, where Firebase Auth persistence may not
+// have fully settled yet.
+let authCheckResolved = false;
+
 onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    redirect("index.html");
+  if (authCheckResolved) return;
+
+  if (user) {
+    authCheckResolved = true;
+    initPaymentPage(user);
     return;
   }
-  initPaymentPage(user);
+
+  setTimeout(() => {
+    if (authCheckResolved) return;
+    if (auth.currentUser) {
+      authCheckResolved = true;
+      initPaymentPage(auth.currentUser);
+    } else {
+      authCheckResolved = true;
+      redirect("index.html");
+    }
+  }, 1200);
 });

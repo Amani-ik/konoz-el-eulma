@@ -58,7 +58,11 @@ function isAdminUser(userDoc = {}) {
 }
 
 function isStrictAdmin(userDoc = {}) {
-  return String(userDoc.role || "").trim().toLowerCase() === "admin";
+  return (
+    String(userDoc.role || "")
+      .trim()
+      .toLowerCase() === "admin"
+  );
 }
 
 function updateAdminMenuVisibility(userDoc = {}) {
@@ -327,7 +331,10 @@ function _recordLoginFailure() {
   const { count } = _readLoginRateLimit();
   const next = count + 1;
   if (next >= LOGIN_MAX_FAILURES) {
-    _writeLoginRateLimit({ count: next, blockedUntil: Date.now() + LOGIN_BLOCK_MS });
+    _writeLoginRateLimit({
+      count: next,
+      blockedUntil: Date.now() + LOGIN_BLOCK_MS,
+    });
   } else {
     _writeLoginRateLimit({ count: next, blockedUntil: 0 });
   }
@@ -1169,7 +1176,9 @@ function resetRegistrationState() {
 
 function getUserAccountStatus(userDoc = {}) {
   if (isAdminUser(userDoc)) return "paid";
-  const status = String(userDoc.status || "paid").trim().toLowerCase();
+  const status = String(userDoc.status || "paid")
+    .trim()
+    .toLowerCase();
   if (status === "pending" || status === "paid" || status === "disabled") {
     return status;
   }
@@ -1274,26 +1283,36 @@ async function handleRegisterStep1() {
   if (nextBtn) {
     nextBtn.disabled = true;
     nextBtn.style.opacity = "0.6";
-    nextBtn.textContent = "جاري التحقق...";
+    nextBtn.textContent = "جاري إنشاء الحساب...";
   }
   if (errorEl) errorEl.textContent = "";
 
   try {
-    // NOTE: We no longer create the Firebase Auth account here.
-    // Account creation is deferred until after the payment receipt
-    // is successfully submitted (see payment.js / submitForApproval).
-    // We only check here whether the email is already registered so
-    // the user gets immediate feedback.
     const emailTaken = await isEmailAlreadyRegistered(email);
     if (emailTaken) {
-      if (errorEl)
-        errorEl.textContent = "هذا البريد الإلكتروني مستخدم مسبقاً.";
+      if (errorEl) errorEl.textContent = "هذا البريد الإلكتروني مستخدم مسبقاً.";
       return;
     }
 
-    // Stash credentials temporarily for use after payment is approved.
-    sessionStorage.setItem("pendingEmail", email);
-    sessionStorage.setItem("pendingPassword", password);
+    // Create the Firebase Auth account as soon as step 1 is completed.
+    // The Firestore user document is created later, in step 2
+    // (handleChoosePlan), once the user has filled in their profile info.
+    console.log("1. جاري إنشاء الحساب في Firebase Auth...");
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+    console.log(
+      "✓ تم إنشاء الحساب بنجاح في Auth. UID:",
+      userCredential.user.uid,
+    );
+
+    // Keep the email around for step 2 (used as a sanity check / fallback).
+    // The password is no longer needed since the Auth account already exists,
+    // so don't keep it sitting in localStorage.
+    localStorage.setItem("pendingEmail", email);
+    localStorage.removeItem("pendingPassword");
 
     const step1 = document.getElementById("regStep1");
     const step2 = document.getElementById("regStep2");
@@ -1328,63 +1347,95 @@ async function isEmailAlreadyRegistered(email) {
   }
 }
 
-function handleChoosePlan() {
-  handleChoosePlanAsync();
-}
+async function handleChoosePlan() {
+  // The Auth account was already created in step 1 (handleRegisterStep1).
+  // Step 2's own fields use the reg* IDs (regUsername, regFullName, regPhone, regDob),
+  // NOT registerEmail/registerPassword/registerUsername/etc (those elements
+  // don't exist).
+  const user = auth.currentUser;
+  const username = document.getElementById("regUsername")?.value?.trim();
+  const fullName = document.getElementById("regFullName")?.value?.trim();
+  const phone = document.getElementById("regPhone")?.value?.trim();
+  const dob = document.getElementById("regDob")?.value;
 
-async function handleChoosePlanAsync() {
-  const username = document.getElementById("regUsername").value.trim();
-  const fullName = document.getElementById("regFullName").value.trim();
-  const phone = document.getElementById("regPhone").value.trim();
-  const dob = document.getElementById("regDob").value;
-  const errorEl = document.getElementById("registerError");
-  const planBtn = document.getElementById("planBtn");
-
-  if (!username || !fullName || !phone || !dob) {
-    if (errorEl)
-      errorEl.textContent =
-        "يرجى إدخال جميع المعلومات المطلوبة قبل اختيار الخطة.";
+  if (!user) {
+    alert("تعذر العثور على الحساب، يرجى إعادة المحاولة من الخطوة الأولى.");
+    return;
+  }
+  if (!username) {
+    alert("يرجى ملء الحقول الأساسية أولاً.");
     return;
   }
 
-  const pendingEmail = sessionStorage.getItem("pendingEmail");
-  const pendingPassword = sessionStorage.getItem("pendingPassword");
-  if (!pendingEmail || !pendingPassword) {
-    if (errorEl)
-      errorEl.textContent =
-        "لم يتم العثور على بيانات التسجيل، يرجى إعادة التسجيل من البداية.";
-    return;
+  // 1. تغيير حالة الزر لمنع الضغط المتكرر
+  const choosePlanBtn = document.getElementById("choosePlanBtn");
+  let originalText = "";
+  if (choosePlanBtn) {
+    originalText = choosePlanBtn.textContent;
+    choosePlanBtn.disabled = true;
+    choosePlanBtn.textContent = "جاري حفظ البيانات…";
   }
-
-  const originalText = planBtn?.textContent || "اختر خطتك";
-  if (planBtn) {
-    planBtn.disabled = true;
-    planBtn.style.opacity = "0.6";
-    planBtn.textContent = "جاري التحضير...";
-  }
-  if (errorEl) errorEl.textContent = "";
 
   try {
-    const normalizedPhone = _normalizePhoneForStorage(phone);
+    // 2. كتابة مستند المستخدم في الـ Firestore مع الانتظار الإجباري (await).
+    // حساب Auth تم إنشاؤه مسبقاً في الخطوة الأولى.
+    console.log("1. جاري حفظ بيانات المستخدم في Firestore...");
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(
+      userRef,
+      {
+        uid: user.uid,
+        username: username,
+        email: user.email,
+        fullName: fullName || username,
+        phone: phone || "",
+        dob: dob || "",
+        role: "client",
+        status: "pending",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+        isSessionActive: false,
+        currentSessionId: "",
+      },
+      { merge: true },
+    );
+    console.log("✓ تم حفظ مستند المستخدم بنجاح في قاعدة البيانات!");
 
-    // NOTE: No Firestore/Auth account exists yet. We stash the
-    // registration profile fields in sessionStorage; they will be
-    // written to Firestore together with the new Auth account only
-    // after a successful payment receipt submission (see payment.js).
-    sessionStorage.setItem("pendingUsername", username);
-    sessionStorage.setItem("pendingFullName", fullName);
-    sessionStorage.setItem("pendingPhone", normalizedPhone);
-    sessionStorage.setItem("pendingDob", dob);
+    // 3. تنظيف بيانات الاعتماد المؤقتة بعد إنشاء الحساب بنجاح
+    localStorage.removeItem("pendingEmail");
+    localStorage.removeItem("pendingPassword");
 
-    window.location.href = "pricing.html";
-  } catch (error) {
-    console.error("Choose plan error:", error);
-    if (errorEl)
-      errorEl.textContent = "تعذر حفظ بياناتك، يرجى المحاولة مرة أخرى.";
-    if (planBtn) {
-      planBtn.disabled = false;
-      planBtn.style.opacity = "1";
-      planBtn.textContent = originalText;
+    // 4. الانتظار حتى يتم تأكيد حفظ جلسة المصادقة (persistence) فعلياً
+    // قبل الانتقال إلى صفحة جديدة. بدون هذا الانتظار، قد يتم تحميل
+    // pricing.html قبل أن تكتمل كتابة الجلسة في IndexedDB/localStorage
+    // على السيرفر المنشور (deployed)، فيرى onAuthStateChanged هناك
+    // "user = null" مؤقتاً ويُعيد التوجيه إلى index.html.
+    console.log("2. التحقق من تثبيت جلسة المصادقة...");
+    await new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, (confirmedUser) => {
+        if (confirmedUser && confirmedUser.uid === user.uid) {
+          unsub();
+          resolve();
+        }
+      });
+      // Safety timeout in case the listener doesn't re-fire
+      setTimeout(() => {
+        unsub();
+        resolve();
+      }, 3000);
+    });
+
+    // 5. الانتقال الآمن لصفحة اختيار الخطة والأسواق بعد الضمان التام للتسجيل
+    console.log("3. جاري التوجيه إلى صفحة الأسواق والخطط...");
+    window.location.assign("pricing.html");
+  } catch (err) {
+    console.error("✗ حدث خطأ أثناء حفظ بيانات المستخدم والانتقال:", err);
+    alert("فشل حفظ البيانات: " + (err.message || err));
+
+    // إعادة الزر لحالته الأصلية في حال الفشل
+    if (choosePlanBtn) {
+      choosePlanBtn.disabled = false;
+      choosePlanBtn.textContent = originalText;
     }
   }
 }
@@ -5269,16 +5320,7 @@ function goToNewsMarket(newsId) {
   });
 })();
 
-// reviews
-async function loadReviews() {
-  const querySnapshot = await getDocs(collection(db, "reviews"));
-  querySnapshot.forEach((doc) => {
-    console.log("التعليق من Firestore: ", doc.data().text);
-  });
-}
-
-// نعيطو للدالة باش تخدم
-loadReviews();
+// reviews loading is handled later, gated behind auth state
 
 // ════════════════════════════════════════════════════════════════
 // ═══ تعريض جميع الدوال المطلوبة على المستوى العام ═══
@@ -5365,12 +5407,15 @@ loadReviews();
 
   // reviews
   async function loadReviews() {
+    if (!auth.currentUser) return;
     const querySnapshot = await getDocs(collection(db, "reviews"));
     querySnapshot.forEach((doc) => {
       console.log("التعليق من Firestore: ", doc.data());
     });
   }
 
-  // نعيطو للدالة باش تخدم
-  loadReviews();
+  // Only load reviews once a user is signed in
+  onAuthStateChanged(auth, (user) => {
+    if (user) loadReviews();
+  });
 })();

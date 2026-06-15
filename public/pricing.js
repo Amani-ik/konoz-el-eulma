@@ -1,10 +1,5 @@
-import { auth, db } from "./firebase-config.js";
-import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import {
-  doc,
-  setDoc,
-  serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { auth } from "./firebase-config.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { loadSubscriptionConfig } from "./subscription-service.js";
 
 const loader = document.getElementById("loader");
@@ -141,7 +136,7 @@ function validateModal() {
   confirmBtn.disabled = !ok;
 }
 
-async function continueToPayment() {
+function continueToPayment() {
   if (!selectedPlan || selectedDistricts.size === 0) {
     modalError.textContent = "يرجى اختيار سوق واحد على الأقل.";
     return;
@@ -151,69 +146,12 @@ async function continueToPayment() {
     selectedDistricts.has(d.id),
   ).map(({ id, name, emoji }) => ({ id, name, emoji }));
 
-  const pendingEmail = sessionStorage.getItem("pendingEmail");
-  const pendingPassword = sessionStorage.getItem("pendingPassword");
-  const pendingUsername = sessionStorage.getItem("pendingUsername") || "";
-  const pendingFullName = sessionStorage.getItem("pendingFullName") || "";
-  const pendingPhone = sessionStorage.getItem("pendingPhone") || "-";
-  const pendingDob = sessionStorage.getItem("pendingDob") || "";
+  localStorage.setItem("finalPlanId", selectedPlan.id);
+  localStorage.setItem("finalPrice", String(selectedPlan.price));
+  localStorage.setItem("finalPlanName", selectedPlan.name);
+  localStorage.setItem("finalDistricts", JSON.stringify(districts));
 
-  if (!pendingEmail || !pendingPassword) {
-    redirect("index.html");
-    return;
-  }
-
-  if (confirmBtn) confirmBtn.disabled = true;
-  modalError.textContent = "";
-
-  try {
-    const cred = await createUserWithEmailAndPassword(
-      auth,
-      pendingEmail,
-      pendingPassword,
-    );
-    const uid = cred.user.uid;
-
-    const normalizedPhone = /^\d+$/.test(String(pendingPhone))
-      ? Number(pendingPhone)
-      : pendingPhone;
-
-    await setDoc(doc(db, "users", uid), {
-      email: pendingEmail,
-      username: pendingUsername,
-      fullName: pendingFullName,
-      phone: normalizedPhone,
-      dob: pendingDob,
-      role: "user",
-      status: "pending",
-      requestedPlan: selectedPlan.id,
-      requestedPlanName: selectedPlan.name,
-      requestedPrice: Number(selectedPlan.price),
-      requestedDistricts: districts,
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    });
-
-    [
-      "pendingEmail",
-      "pendingPassword",
-      "pendingUsername",
-      "pendingFullName",
-      "pendingPhone",
-      "pendingDob",
-    ].forEach((k) => sessionStorage.removeItem(k));
-
-    sessionStorage.setItem("finalPlanId", selectedPlan.id);
-    sessionStorage.setItem("finalPrice", String(selectedPlan.price));
-    sessionStorage.setItem("finalPlanName", selectedPlan.name);
-    sessionStorage.setItem("finalDistricts", JSON.stringify(districts));
-
-    redirect("payment.html");
-  } catch (err) {
-    console.error("Account creation error:", err);
-    modalError.textContent = "تعذر إنشاء الحساب، يرجى المحاولة مرة أخرى.";
-    if (confirmBtn) confirmBtn.disabled = false;
-  }
+  redirect("payment.html");
 }
 
 async function initPricingPage() {
@@ -235,14 +173,42 @@ async function initPricingPage() {
   pricingScreen.classList.remove("hidden");
 }
 
-// No authentication gate here: the Auth account doesn't exist yet at
-// this point in the flow. Instead, make sure the user actually went
-// through registration steps 1 & 2 (their pending signup data must be
-// present in sessionStorage) before letting them pick a plan.
-const pendingEmail = sessionStorage.getItem("pendingEmail");
-const pendingPassword = sessionStorage.getItem("pendingPassword");
-if (!pendingEmail || !pendingPassword) {
-  redirect("index.html");
-} else {
-  initPricingPage();
-}
+// The Auth account is created on the registration page (step 2, "choose
+// your plan" button) before redirecting here. Firebase Auth persistence
+// (IndexedDB/localStorage) can take a brief moment to settle after a full
+// page navigation on a freshly-deployed (non-localhost) origin, so
+// onAuthStateChanged may fire once with `user = null` immediately after
+// arriving here even though the account was just created successfully.
+//
+// To avoid bouncing the user back to index.html in that case, we wait for
+// a short grace period and re-check auth.currentUser before giving up.
+let authCheckResolved = false;
+
+onAuthStateChanged(auth, (user) => {
+  if (authCheckResolved) return;
+
+  if (user) {
+    authCheckResolved = true;
+    console.log("Active user verified on pricing:", user.uid);
+    initPricingPage();
+    return;
+  }
+
+  // No user on the first callback — give Firebase a brief moment to
+  // restore the session before redirecting away.
+  setTimeout(() => {
+    if (authCheckResolved) return;
+    if (auth.currentUser) {
+      authCheckResolved = true;
+      console.log(
+        "Active user verified on pricing (after grace period):",
+        auth.currentUser.uid,
+      );
+      initPricingPage();
+    } else {
+      authCheckResolved = true;
+      console.warn("No user active on pricing, fallback to index");
+      window.location.replace("index.html");
+    }
+  }, 1200);
+});
