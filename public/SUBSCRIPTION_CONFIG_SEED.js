@@ -55,13 +55,43 @@ export const SUBSCRIPTION_CONFIG_SEED = {
     },
   ],
   districts: [
-    { id: "Kankari", name: "سوق الجملة للخردوات ومواد البناء", emoji: "🔧", active: true },
-    { id: "kitchen", name: "سوق الجملة للأدوات والأواني المنزلية", emoji: "🍶", active: true },
-    { id: "sports", name: "سوق الجملة لمستلزمات الرياضة", emoji: "⚽", active: true },
-    { id: "Decoration", name: "سوق الجملة لمستلزمات الديكور والزينة", emoji: "🎍", active: true },
-    { id: "electronics", name: "سوق الجملة للأجهزة الإلكترونية", emoji: "💻", active: true },
-    { id: "Electricity", name: "سوق الجملة للكهربائيات", emoji: "⚡", active: true },
-    { id: "Toys", name: "سوق الجملة للألعاب", emoji: "🧸", active: true },
+    {
+      id: "Kankari",
+      name: "سوق الجملة للخردوات ومواد البناء",
+      emoji: "🔧",
+      active: true,
+    },
+    {
+      id: "kitchen",
+      name: "سوق الجملة للأدوات والأواني المنزلية",
+      emoji: "🍶",
+      active: true,
+    },
+    {
+      id: "sports",
+      name: "سوق الجملة لمستلزمات الرياضة",
+      emoji: "⚽",
+      active: true,
+    },
+    {
+      id: "Decoration",
+      name: "سوق الجملة لمستلزمات الديكور والزينة",
+      emoji: "🎍",
+      active: true,
+    },
+    {
+      id: "electronics",
+      name: "سوق الجملة للأجهزة الإلكترونية",
+      emoji: "💻",
+      active: true,
+    },
+    {
+      id: "Electricity",
+      name: "سوق الجملة للمستلزمات الكهربائية",
+      emoji: "⚡",
+      active: true,
+    },
+    { id: "Toys", name: "سوق الجملة للألعاب", emoji: "🎠", active: true },
   ],
 };
 

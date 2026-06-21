@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>تسجيل الدخول — كنوز العلمة</title>
+    <title>تسجيل دخول الادارة — كنوز العلمة</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap"
       rel="stylesheet"
@@ -16,14 +16,9 @@
       <div class="lp-wrap" id="lpWrap"></div>
       <div class="lcard">
         <span class="globe">👑</span>
-        <div class="rtitle">كنوز العلمة</div>
-        <div class="rsub">دخول لوحة الإدارة</div>
-        <form
-          id="loginForm"
-          class="login-form"
-          autocomplete="off"
-          novalidate
-        >
+        <div class="rtitle">لوحة تحكم الادارة</div>
+        <div class="rsub">كنوز العلمة</div>
+        <form id="loginForm" class="login-form" autocomplete="off" novalidate>
           <input
             type="text"
             name="prevent_autofill_username"
@@ -70,12 +65,21 @@
         </form>
         <p
           id="loginError"
-          style="color: #ff8a8a; font-size: 13px; margin-top: 12px; min-height: 18px"
+          style="
+            color: #ff8a8a;
+            font-size: 13px;
+            margin-top: 12px;
+            min-height: 18px;
+          "
         ></p>
         <div style="margin-top: 16px">
           <a
             href="index.html"
-            style="color: rgba(255,255,255,0.5); font-size: 13px; text-decoration: none"
+            style="
+              color: rgba(255, 255, 255, 0.5);
+              font-size: 13px;
+              text-decoration: none;
+            "
             >العودة للتطبيق</a
           >
         </div>
@@ -115,8 +119,7 @@
           await signInWithEmailAndPassword(auth, email, password);
           window.location.replace("admin.html");
         } catch (err) {
-          if (loginError)
-            loginError.textContent = "بيانات الدخول غير صحيحة.";
+          if (loginError) loginError.textContent = "بيانات الدخول غير صحيحة.";
           console.error(err);
         } finally {
           lBtn.disabled = false;

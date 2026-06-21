@@ -23,7 +23,14 @@ const adminEmailEl = document.getElementById("adminEmail");
 const metricPending = document.getElementById("metricPending");
 const metricPaid = document.getElementById("metricPaid");
 const metricSessions = document.getElementById("metricSessions");
+const metricTotal = document.getElementById("metricTotal");
+// Two instances of the pending table: one on overview, one on its own tab
 const pendingTableBody = document.getElementById("pendingTableBody");
+const pendingTableBody2 = document.getElementById("pendingTableBody2");
+const overviewPendingCount = document.getElementById("overviewPendingCount");
+const pendingTabCount = document.getElementById("pendingTabCount");
+const usersTabCount = document.getElementById("usersTabCount");
+const sidebarPendingCount = document.getElementById("sidebarPendingCount");
 const usersTableBody = document.getElementById("usersTableBody");
 const userSearchInput = document.getElementById("userSearchInput");
 const userSearchBtn = document.getElementById("userSearchBtn");
@@ -51,7 +58,11 @@ function redirect(url) {
 }
 
 function isStrictAdmin(userDoc = {}) {
-  return String(userDoc.role || "").trim().toLowerCase() === "admin";
+  return (
+    String(userDoc.role || "")
+      .trim()
+      .toLowerCase() === "admin"
+  );
 }
 
 function escapeHtml(value = "") {
@@ -72,19 +83,54 @@ function merchantName(data = {}) {
   );
 }
 
-function paymentBadge(method = "") {
-  const normalized = String(method).trim().toLowerCase();
-  if (normalized.includes("barid") || normalized === "baridimob") {
-    return `<span class="badge badge-baridimob">Baridimob</span>`;
+function fullNameOf(data = {}) {
+  return data.fullName || data["full name"] || data.companyName || "—";
+}
+
+function usernameOf(data = {}) {
+  return data.username || "—";
+}
+
+function dateOfBirthOf(data = {}) {
+  const dob =
+    data.dob || data.dateOfBirth || data.birthDate || data.birthday || "";
+  if (!dob) return "—";
+  // Firestore Timestamp instances expose toDate()
+  if (typeof dob === "object" && typeof dob.toDate === "function") {
+    try {
+      return dob.toDate().toLocaleDateString("ar-DZ");
+    } catch {
+      return "—";
+    }
   }
-  if (normalized.includes("ccp")) {
-    return `<span class="badge badge-ccp">CCP</span>`;
-  }
-  return `<span class="badge">${method || "—"}</span>`;
+  return String(dob);
+}
+
+function requestedPlanLabel(data = {}) {
+  return data.requestedPlanName || data.requestedPlan || "—";
+}
+
+function requestedDistrictEntries(data = {}) {
+  const districts = data.requestedDistricts;
+  const list = Array.isArray(districts) ? districts : districts ? [districts] : [];
+
+  return list.filter(Boolean).map((d) => {
+    if (typeof d === "object") {
+      return {
+        id: d.id || "",
+        name: d.name || d.id || "",
+        emoji: d.emoji || "",
+      };
+    }
+    // Fallback for legacy data stored as plain district id strings
+    return { id: String(d), name: String(d), emoji: "" };
+  });
 }
 
 function accountStatus(data = {}) {
-  const s = String(data.status || "paid").trim().toLowerCase();
+  const s = String(data.status || "paid")
+    .trim()
+    .toLowerCase();
   if (s === "pending" || s === "paid" || s === "disabled") return s;
   return "paid";
 }
@@ -96,19 +142,20 @@ function isSessionActive(data = {}) {
 
 function statusPill(status = "") {
   const s = String(status || "paid").toLowerCase();
-  if (s === "pending") return `<span class="status-pill status-pending">معلق</span>`;
-  if (s === "disabled") return `<span class="status-pill status-disabled">محظور</span>`;
+  if (s === "pending")
+    return `<span class="status-pill status-pending">معلق</span>`;
+  if (s === "disabled")
+    return `<span class="status-pill status-disabled">محظور</span>`;
   return `<span class="status-pill status-paid">مدفوع</span>`;
 }
 
 function showDataError(message) {
   const text = escapeHtml(message || "تعذر تحميل البيانات");
-  if (pendingTableBody) {
-    pendingTableBody.innerHTML = `<tr class="empty-row"><td colspan="5">${text}</td></tr>`;
-  }
-  if (usersTableBody) {
-    usersTableBody.innerHTML = `<tr class="empty-row"><td colspan="6">${text}</td></tr>`;
-  }
+  const pendingHtml = `<tr class="empty-row"><td colspan="9">${text}</td></tr>`;
+  const usersHtml = `<tr class="empty-row"><td colspan="6">${text}</td></tr>`;
+  if (pendingTableBody) pendingTableBody.innerHTML = pendingHtml;
+  if (pendingTableBody2) pendingTableBody2.innerHTML = pendingHtml;
+  if (usersTableBody) usersTableBody.innerHTML = usersHtml;
 }
 
 function subscriptionExpiryTimestamp() {
@@ -137,36 +184,63 @@ function renderPendingRow(id, data) {
   const safeReceipt = escapeHtml(receiptUrl);
   const thumb = receiptUrl
     ? `<img class="receipt-thumb" src="${safeReceipt}" alt="إيصال" data-receipt="${safeReceipt}" />`
-    : `<span style="color:var(--muted)">لا يوجد</span>`;
+    : `<span style="color:var(--text-3)">لا يوجد</span>`;
+
+  const planLabel = requestedPlanLabel(data);
+  const planCell =
+    planLabel && planLabel !== "—"
+      ? `<span class="badge badge-plan">${escapeHtml(planLabel)}</span>`
+      : `<span style="color:var(--text-3)">—</span>`;
+
+  const districtEntries = requestedDistrictEntries(data);
+  const districtsCell = districtEntries.length
+    ? `<div class="district-tags">${districtEntries
+        .map(
+          (d) =>
+            `<span class="district-tag" title="${escapeHtml(d.id)}">${d.emoji ? escapeHtml(d.emoji) + " " : ""}${escapeHtml(d.name)}</span>`,
+        )
+        .join("")}</div>`
+    : `<span style="color:var(--text-3)">—</span>`;
 
   return `
     <tr data-uid="${escapeHtml(id)}">
-      <td>${escapeHtml(merchantName(data))}</td>
-      <td dir="ltr">${escapeHtml(data.phone || "—")}</td>
-      <td>${paymentBadge(data.paymentMethod)}</td>
+      <td class="name-cell">${escapeHtml(fullNameOf(data))}</td>
+      <td class="mono">${escapeHtml(usernameOf(data))}</td>
+      <td class="mono">${escapeHtml(data.email || "—")}</td>
+      <td class="mono">${escapeHtml(data.phone || "—")}</td>
+      <td class="mono">${escapeHtml(dateOfBirthOf(data))}</td>
+      <td>${planCell}</td>
+      <td>${districtsCell}</td>
       <td>${thumb}</td>
       <td>
-        <button type="button" class="btn btn-primary btn-approve" data-uid="${escapeHtml(id)}">
-          <i class="fa-solid fa-check"></i> موافقة
-        </button>
+        <div class="row-actions">
+          <button type="button" class="btn btn-primary btn-sm btn-approve" data-uid="${escapeHtml(id)}">
+            <i class="fa-solid fa-check"></i> موافقة
+          </button>
+          <button type="button" class="btn btn-danger btn-sm btn-reject" data-uid="${escapeHtml(id)}">
+            <i class="fa-solid fa-xmark"></i> رفض
+          </button>
+        </div>
       </td>
     </tr>
   `;
 }
 
 function renderPendingTable(docs) {
-  if (!pendingTableBody) return;
+  const html = docs.length
+    ? docs.map(({ id, data }) => renderPendingRow(id, data)).join("")
+    : `<tr class="empty-row"><td colspan="9">لا توجد طلبات معلقة</td></tr>`;
 
-  if (!docs.length) {
-    pendingTableBody.innerHTML = `
-      <tr class="empty-row"><td colspan="5">لا توجد طلبات معلقة</td></tr>
-    `;
-    return;
+  if (pendingTableBody) pendingTableBody.innerHTML = html;
+  if (pendingTableBody2) pendingTableBody2.innerHTML = html;
+
+  const countStr = String(docs.length);
+  if (overviewPendingCount) overviewPendingCount.textContent = countStr;
+  if (pendingTabCount) pendingTabCount.textContent = countStr;
+  if (sidebarPendingCount) {
+    sidebarPendingCount.textContent = countStr;
+    sidebarPendingCount.style.display = docs.length ? "" : "none";
   }
-
-  pendingTableBody.innerHTML = docs
-    .map(({ id, data }) => renderPendingRow(id, data))
-    .join("");
 }
 
 function matchesSearch(data, term) {
@@ -182,7 +256,8 @@ function matchesStatusFilter(data) {
 
 function filterUsers(users) {
   return users.filter(
-    ({ data }) => matchesSearch(data, searchFilter) && matchesStatusFilter(data),
+    ({ data }) =>
+      matchesSearch(data, searchFilter) && matchesStatusFilter(data),
   );
 }
 
@@ -203,24 +278,30 @@ function renderUsersTable(users) {
       const sessionActive = isSessionActive(data);
       const isDisabled = accountStatus(data) === "disabled";
       const isTargetAdmin =
-        String(data.role || "").trim().toLowerCase() === "admin";
+        String(data.role || "")
+          .trim()
+          .toLowerCase() === "admin";
       const accountToggleBtn = isTargetAdmin
         ? ""
         : isDisabled
-          ? `<button type="button" class="btn btn-primary btn-enable-account" data-uid="${escapeHtml(id)}">تفعيل الحساب</button>`
-          : `<button type="button" class="btn btn-danger btn-block-account" data-uid="${escapeHtml(id)}">حظر الحساب</button>`;
+          ? `<button type="button" class="btn btn-primary btn-sm btn-enable-account" data-uid="${escapeHtml(id)}"><i class="fa-solid fa-circle-check"></i> تفعيل</button>`
+          : `<button type="button" class="btn btn-danger btn-sm btn-block-account" data-uid="${escapeHtml(id)}"><i class="fa-solid fa-ban"></i> حظر</button>`;
+
+      const sessionEl = sessionActive
+        ? `<span class="session-active"><span class="session-dot"></span> نشطة</span>`
+        : `<span style="color:var(--text-3)">—</span>`;
 
       return `
         <tr data-uid="${escapeHtml(id)}">
-          <td>${escapeHtml(merchantName(data))}</td>
-          <td dir="ltr">${escapeHtml(data.email || "—")}</td>
-          <td dir="ltr">${escapeHtml(data.phone || "—")}</td>
+          <td class="name-cell">${escapeHtml(merchantName(data))}</td>
+          <td class="mono">${escapeHtml(data.email || "—")}</td>
+          <td class="mono">${escapeHtml(data.phone || "—")}</td>
           <td>${statusPill(accountStatus(data))}</td>
-          <td>${sessionActive ? '<i class="fa-solid fa-circle" style="color:var(--accent);font-size:10px"></i> نشطة' : "—"}</td>
+          <td>${sessionEl}</td>
           <td>
             <div class="row-actions">
-              <button type="button" class="btn btn-warn btn-reset-session" data-uid="${escapeHtml(id)}" ${sessionActive ? "" : "disabled"}>
-                إعادة الجلسة
+              <button type="button" class="btn btn-warn btn-sm btn-reset-session" data-uid="${escapeHtml(id)}" ${sessionActive ? "" : "disabled"}>
+                <i class="fa-solid fa-rotate"></i> إعادة الجلسة
               </button>
               ${accountToggleBtn}
             </div>
@@ -233,7 +314,10 @@ function renderUsersTable(users) {
 
 async function approveUser(userId, userData) {
   const receiptUrl =
-    userData.submittedReceiptUrl || userData.receiptUrl || userData.receipt || "";
+    userData.submittedReceiptUrl ||
+    userData.receiptUrl ||
+    userData.receipt ||
+    "";
   const paymentMethod = userData.paymentMethod || "";
   const amount = Number(userData.requestedPrice) || SUBSCRIPTION_AMOUNT;
   const planId = userData.requestedPlan || "";
@@ -249,10 +333,12 @@ async function approveUser(userId, userData) {
 
   batch.update(userRef, {
     status: "paid",
+    districts: Array.isArray(districts) ? districts : [],
     activatedAt: serverTimestamp(),
     subscriptionExpiryDate: subscriptionExpiryTimestamp(),
     submittedReceiptUrl: deleteField(),
     requestedPlan: deleteField(),
+    requestedPlanName: deleteField(),
     requestedPrice: deleteField(),
     requestedDistricts: deleteField(),
     receiptSubmittedAt: deleteField(),
@@ -281,6 +367,21 @@ async function approveUser(userId, userData) {
   await batch.commit();
 }
 
+async function rejectUser(userId, userData) {
+  const batch = writeBatch(db);
+  const userRef = doc(db, "users", userId);
+  const rejectedRef = doc(db, "rejectedUsers", userId);
+
+  batch.set(rejectedRef, {
+    ...userData,
+    rejectedAt: serverTimestamp(),
+    originalUid: userId,
+  });
+  batch.delete(userRef);
+
+  await batch.commit();
+}
+
 async function resetSession(userId) {
   const userRef = doc(db, "users", userId);
   const batch = writeBatch(db);
@@ -298,7 +399,11 @@ async function setAccountDisabled(userId, disabled) {
   if (!snap.exists()) throw new Error("User not found.");
 
   const userData = snap.data() || {};
-  if (String(userData.role || "").trim().toLowerCase() === "admin") {
+  if (
+    String(userData.role || "")
+      .trim()
+      .toLowerCase() === "admin"
+  ) {
     throw new Error("Cannot modify admin accounts.");
   }
 
@@ -343,6 +448,32 @@ function bindTableActions() {
         console.error("approveUser:", err);
         alert("فشلت الموافقة. حاول مرة أخرى.");
         approveBtn.disabled = false;
+      }
+      return;
+    }
+
+    const rejectBtn = e.target.closest(".btn-reject");
+    if (rejectBtn) {
+      const uid = rejectBtn.dataset.uid;
+      if (!uid || rejectBtn.disabled) return;
+
+      const confirmed = confirm(
+        "تأكيد رفض هذا الطلب؟ سيتم نقل المستخدم إلى قائمة المرفوضين.",
+      );
+      if (!confirmed) return;
+
+      rejectBtn.disabled = true;
+      try {
+        const snap = await getDoc(doc(db, "users", uid));
+        if (!snap.exists() || snap.data().status !== "pending") {
+          alert("هذا الطلب لم يعد معلقاً.");
+          return;
+        }
+        await rejectUser(uid, snap.data());
+      } catch (err) {
+        console.error("rejectUser:", err);
+        alert("فشل رفض الطلب. حاول مرة أخرى.");
+        rejectBtn.disabled = false;
       }
       return;
     }
@@ -412,6 +543,8 @@ function applyUsersSnapshot(users) {
   if (metricPending) metricPending.textContent = String(pending.length);
   if (metricPaid) metricPaid.textContent = String(paid.length);
   if (metricSessions) metricSessions.textContent = String(sessions.length);
+  if (metricTotal) metricTotal.textContent = String(users.length);
+  if (usersTabCount) usersTabCount.textContent = String(users.length);
 
   renderPendingTable(pending);
   renderUsersTable(users);
@@ -485,7 +618,7 @@ function bindLogout() {
     } catch (err) {
       console.error("logout:", err);
     }
-    redirect("login.html");
+    redirect("index.html");
   });
 }
 
@@ -509,7 +642,8 @@ async function enforceAdminGate(user) {
     return false;
   }
 
-  if (adminEmailEl) adminEmailEl.textContent = user.email || userDoc.email || "—";
+  if (adminEmailEl)
+    adminEmailEl.textContent = user.email || userDoc.email || "—";
   hideGate();
   showAdmin();
   return true;

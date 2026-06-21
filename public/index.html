@@ -12,7 +12,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
-     <link rel="stylesheet" href="style.css">
+     <link rel="stylesheet" href="style.css?v=1.0.1">
     <link rel="icon" type="image/png" href="logo.png">
 
     <link rel="manifest" href="manifest.json">
@@ -363,7 +363,7 @@
           onclick="dZoomBtn(1.28)"
           title="Zoom In"
         >
-          🔍
+          ➕
         </button>
         <button
           type="button"
@@ -372,7 +372,7 @@
           onclick="dZoomBtn(0.78)"
           title="Zoom Out"
         >
-          🔎
+          ➖
         </button>
       </div>
     </div>
@@ -461,7 +461,6 @@
         <div class="user-menu-section">خيارات</div>
         <button class="user-menu-item" onclick="onUserMenuAction('account')"><span class="icon">👤</span>عرض الحساب</button>
         <button class="account-panel-item" onclick="onUserMenuAction('favoriteSuppliers')"><span class="icon">⭐</span>الموردون المفضلون </button>
-        <button class="user-menu-item admin-dashboard-item" id="adminDashboardMenuItem" hidden onclick="onUserMenuAction('adminDashboard')"><span class="icon">🛡️</span>لوحة الإدارة</button>
         <button class="user-menu-item" onclick="onUserMenuAction('logout')"><span class="icon">🔓</span>تسجيل الخروج</button>
         <div class="user-menu-section">قوائم قريبة</div>
         <button class="user-menu-item" onclick="onUserMenuAction('restaurants')"><span class="icon">🍽️</span>مطاعم قريبة <span style="display:inline-block;background:#ff9500;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:12px;margin-right:4px;">قريبا</span></button>
@@ -642,6 +641,7 @@
       </div>
     </div>
           <script src="data.js"></script>
-          <script type="module" src="script.js"></script>
+          <script type="module" src="script.js?v=1.0.1"></script>
+
   </body>
 </html>

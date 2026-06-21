@@ -22,12 +22,120 @@ import {
   orderBy,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  doc,
+  getDoc,
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 let NEWS_DATA = [];
 let SYSTEM_DATA = [];
 
 // Live session subscription handle
 let CURRENT_SESSION_UNSUB = null;
+
+//App version check
+// 1. تحديد الإصدار الحالي للموقع (يجب أن يطابق الرقم الموجود في index.html)
+const CLIENT_VERSION = "1.0.1";
+
+async function checkAppVersion() {
+  try {
+    // 2. جلب رقم الإصدار المعتمد من الفايربيس
+    const versionDocRef = doc(db, "app_settings", "version_control");
+    const versionSnap = await getDoc(versionDocRef);
+
+    if (versionSnap.exists()) {
+      const data = versionSnap.data();
+      const latestVersion = data.current_version;
+
+      // 3. المقارنة: إذا كان إصدار السيرفر أحدث من إصدار متصفح المستخدم
+      if (latestVersion && latestVersion !== CLIENT_VERSION) {
+        console.log(
+          "🔄 تم العثور على تحديث جديد! جاري تحديث الموقع تلقائياً...",
+        );
+
+        // تنظيف الكاش وإعادة تحميل الصفحة إجبارياً
+        window.location.reload(true);
+      } else {
+        console.log("✓ الموقع يعمل على آخر إصدار:", CLIENT_VERSION);
+      }
+    }
+  } catch (error) {
+    console.error("خطأ أثناء الفحص عن التحديثات:", error);
+  }
+}
+
+// 4. تشغيل الفحص مباشرة عند تحميل الصفحة
+window.addEventListener("DOMContentLoaded", checkAppVersion);
+// ════════════════════════════════════════════════════════════════
+// ═══ District Access / Plan Locking ═══
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Read the user's Firestore `districts` array and set d.isPaid = true on
+ * every DISTRICTS entry that matches. Matching uses `id` first (most reliable),
+ * then falls back to `name` and `emoji` — covering any shape the stored object
+ * might have. All non-matching districts stay isPaid = false.
+ * Admins bypass all checks and get every district unlocked.
+ */
+async function _loadUserDistricts(user) {
+  // Always reset to locked before applying the user's plan
+  DISTRICTS.forEach((d) => {
+    d.isPaid = false;
+  });
+
+  try {
+    // Accept an explicit user arg (from onAuthStateChanged) or fall back to
+    // auth.currentUser — but prefer the explicit arg so this works immediately
+    // on page reload before Firebase has fully rehydrated the session.
+    const resolvedUser = user || auth.currentUser;
+    if (!resolvedUser) return;
+
+    const userSnap = await getDoc(doc(db, "users", resolvedUser.uid));
+    if (!userSnap.exists()) return;
+
+    const userDoc = userSnap.data() || {};
+
+    // Admins get full access — unlock every district
+    if (isAdminUser(userDoc)) {
+      DISTRICTS.forEach((d) => {
+        d.isPaid = true;
+      });
+      return;
+    }
+
+    const raw = userDoc.districts;
+    if (!Array.isArray(raw) || raw.length === 0) return;
+
+    DISTRICTS.forEach((d) => {
+      const dId = String(d.id || "").trim();
+      const dName = String(d.name || "").trim();
+      const dEmoji = String(d.emoji || "").trim();
+
+      const matched = raw.some((entry) => {
+        if (!entry) return false;
+
+        // Plain string stored — match against id, name, or emoji
+        if (typeof entry === "string") {
+          const s = entry.trim();
+          return s === dId || s === dName || s === dEmoji;
+        }
+
+        // Object stored — prefer id match, fall back to name+emoji
+        const eId = String(entry.id || "").trim();
+        const eName = String(entry.name || "").trim();
+        const eEmoji = String(entry.emoji || "").trim();
+
+        if (eId && dId) return eId === dId;
+        if (eName && dName) return eName === dName && eEmoji === dEmoji;
+        return false;
+      });
+
+      if (matched) d.isPaid = true;
+    });
+  } catch (err) {
+    console.error("_loadUserDistricts error:", err);
+  }
+}
 
 function generateSessionToken() {
   try {
@@ -68,7 +176,7 @@ function isStrictAdmin(userDoc = {}) {
 function updateAdminMenuVisibility(userDoc = {}) {
   const item = document.getElementById("adminDashboardMenuItem");
   if (!item) return;
-  item.hidden = !isStrictAdmin(userDoc);
+  item.hidden = !isAdminUser(userDoc);
 }
 
 function isSessionActiveField(userDoc = {}) {
@@ -256,6 +364,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // تهيئة الهيكل العظمي أولاً
   initializeSkeleton();
 
+  // Hide the admin dashboard menu item by default until we know the
+  // signed-in user's role (onAuthStateChanged will reveal it for admins).
+  updateAdminMenuVisibility({});
+
   emailInput = document.getElementById("emailIn");
   passwordInput = document.getElementById("passIn");
   loginBtn = document.getElementById("lBtn");
@@ -402,33 +514,60 @@ async function handleLogin() {
     let userDoc = {};
     let isAdmin = false;
 
+    // Resets the login button and signs the user back out; used by every
+    // blocking branch below (pending / disabled / malformed account).
+    const blockLogin = async (message) => {
+      try {
+        await signOut(auth);
+      } catch (e) {}
+      if (message) alert(message);
+      loginBtn.disabled = false;
+      loginBtn.style.opacity = "1";
+      loginBtn.textContent = originalText;
+    };
+
     // --- Account status check ---
     try {
       const userDocRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userDocRef);
-      userDoc = userSnap.exists() ? userSnap.data() || {} : {};
+
+      // No Firestore document for this user at all -> malformed account
+      if (!userSnap.exists()) {
+        await blockLogin(
+          "حسابك غير مكتمل الإنشاء (لا توجد بيانات مرتبطة به). يرجى التواصل مع الإدارة.",
+        );
+        return;
+      }
+
+      userDoc = userSnap.data() || {};
       isAdmin = isAdminUser(userDoc);
+
+      // Doc exists but has no recognized status field -> also malformed
+      // (admins are exempt since they aren't expected to carry a status field)
+      const rawStatus = String(userDoc.status || "")
+        .trim()
+        .toLowerCase();
+      const hasValidStatusField = ["pending", "paid", "disabled"].includes(
+        rawStatus,
+      );
+
+      if (!isAdmin && !hasValidStatusField) {
+        await blockLogin(
+          "حسابك غير مكتمل الإنشاء (لا تحتوي بياناته على حالة صالحة). يرجى التواصل مع الإدارة.",
+        );
+        return;
+      }
+
       const accountStatus = getUserAccountStatus(userDoc);
 
       if (!isAdmin && accountStatus === "pending") {
-        try {
-          await signOut(auth);
-        } catch (e) {}
+        await blockLogin();
         showPendingScreen();
-        loginBtn.disabled = false;
-        loginBtn.style.opacity = "1";
-        loginBtn.textContent = originalText;
         return;
       }
 
       if (!isAdmin && accountStatus === "disabled") {
-        try {
-          await signOut(auth);
-        } catch (e) {}
-        alert("تم تعطيل حسابك. يرجى التواصل مع الإدارة.");
-        loginBtn.disabled = false;
-        loginBtn.style.opacity = "1";
-        loginBtn.textContent = originalText;
+        await blockLogin("تم تعطيل حسابك. يرجى التواصل مع الإدارة.");
         return;
       }
 
@@ -622,9 +761,12 @@ function refreshAppUI() {
   try {
     // 1. تهيئة شاشة العالم
     if (!document.getElementById("worldScreen").classList.contains("hidden")) {
-      buildWorld();
-      centerWorld();
-      setTimeout(() => animZoomTo(47, 40), 500);
+      // Reload district access rights, then rebuild the world map
+      _loadUserDistricts().finally(() => {
+        buildWorld();
+        centerWorld();
+        setTimeout(() => animZoomTo(47, 40), 500);
+      });
     }
 
     // 2. إظهار زر خدمة العملاء
@@ -689,6 +831,7 @@ const DIST_PHOTOS = {
 const DISTRICTS = [
   {
     id: "Kankari",
+    isPaid: false,
     name: "سوق الجملة للخردوات ومواد البناء",
     emoji: "🔧",
     accent: "#e67e22",
@@ -733,6 +876,7 @@ const DISTRICTS = [
   },
   {
     id: "kitchen",
+    isPaid: false,
     name: "سوق الجملة للأدوات والأواني المنزلية",
     emoji: "🍶",
     accent: "#35d9b8",
@@ -757,6 +901,7 @@ const DISTRICTS = [
   },
   {
     id: "sports",
+    isPaid: false,
     name: "سوق الجملة لمستلزمات الرياضة",
     emoji: "⚽",
     accent: "#27ae60",
@@ -783,6 +928,7 @@ const DISTRICTS = [
   },
   {
     id: "Decoration",
+    isPaid: false,
     name: "سوق الجملة لمستلزمات الديكور والزينة",
     emoji: "🎍",
     accent: "#c379e3",
@@ -801,6 +947,7 @@ const DISTRICTS = [
   },
   {
     id: "electronics",
+    isPaid: false,
     name: "سوق الجملة للأجهزة الإلكترونية",
     emoji: "💻",
     accent: "#2980b9",
@@ -828,6 +975,7 @@ const DISTRICTS = [
   },
   {
     id: "Electricity",
+    isPaid: false,
     name: "سوق الجملة للمستلزمات الكهربائية",
     emoji: "⚡",
     accent: "#efd021",
@@ -865,7 +1013,8 @@ const DISTRICTS = [
   },
   {
     id: "Toys",
-    name: "سوق الجملة لألعاب الأطفال",
+    isPaid: false,
+    name: "سوق الجملة للألعاب ",
     emoji: "🎠",
     accent: "#ed89ac",
     px: 27,
@@ -1571,9 +1720,13 @@ function buildWorld() {
   inner.querySelectorAll(".dmarker").forEach((e) => e.remove());
   DISTRICTS.forEach((d, i) => {
     const m = document.createElement("div");
-    m.className = "dmarker";
+    m.className = "dmarker" + (d.isPaid ? "" : " dmarker-locked");
     m.style.cssText = `left:${d.px}%;top:${d.py}%;animation-duration:${3 + i * 0.35}s;animation-delay:${i * 0.2}s;`;
-    m.innerHTML = `<div class="mbubble">${d.emoji}</div><div class="mtip"></div><div class="mlabel"><span class="mlname">${d.name}</span></div>`;
+    if (d.isPaid) {
+      m.innerHTML = `<div class="mbubble">${d.emoji}</div><div class="mtip"></div><div class="mlabel"><span class="mlname">${d.name}</span></div>`;
+    } else {
+      m.innerHTML = `<div class="mbubble mbubble-locked">🔒</div><div class="mtip"></div><div class="mlabel"><span class="mlname">${d.name}</span></div>`;
+    }
     m.addEventListener("click", (e) => enterDistrict(d, e));
     m.style.opacity = "0";
     inner.appendChild(m);
@@ -1703,6 +1856,12 @@ wC.addEventListener("touchend", (e) => {
 
 /* ══ ENTER DISTRICT ══ */
 function enterDistrict(d, evt, onReady) {
+  // Block entry if district is not paid
+  if (!d.isPaid) {
+    openComingSoon();
+    return;
+  }
+
   S.activeD = d;
   const distIdx = DISTRICTS.indexOf(d);
   localStorage.setItem("lastDistIdx", distIdx);
@@ -2808,8 +2967,25 @@ try {
         console.warn("updateAdminMenuVisibility error:", e);
         updateAdminMenuVisibility({});
       }
+
+      // Load district access with the confirmed user, then rebuild the world
+      // map so lock states reflect the actual plan. This runs on every page
+      // load after Firebase resolves the session — guaranteed to have a user.
+      try {
+        await _loadUserDistricts(user);
+        const worldScreen = document.getElementById("worldScreen");
+        if (worldScreen && !worldScreen.classList.contains("hidden")) {
+          buildWorld();
+        }
+      } catch (e) {
+        console.error("_loadUserDistricts / buildWorld error:", e);
+      }
     } else {
       updateAdminMenuVisibility({});
+      // Reset all districts to locked when signed out
+      DISTRICTS.forEach((d) => {
+        d.isPaid = false;
+      });
       // cleanup live monitor on sign-out
       if (CURRENT_SESSION_UNSUB) {
         try {
@@ -4182,26 +4358,47 @@ function handleSearchInput(val) {
   } else {
     _searchResults.slice(0, 12).forEach((item, idx) => {
       const li = document.createElement("li");
-      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const highlighted = item.mkt.name.replace(
-        new RegExp("(" + esc + ")", "gi"),
-        "<mark>$1</mark>",
-      );
-      // Only show district name when searching globally (world screen)
-      const districtLine = _isOnDistrict()
-        ? ""
-        : '<div class="sd-district">' + item.d.name + "</div>";
-      li.innerHTML =
-        '<span class="sd-emoji">' +
-        item.d.emoji +
-        "</span>" +
-        '<div class="sd-info">' +
-        '<div class="sd-name">' +
-        highlighted +
-        "</div>" +
-        districtLine +
-        "</div>";
-      li.addEventListener("click", () => executeSearch(idx));
+      const isOnWorld = !_isOnDistrict();
+      const isLocked = isOnWorld && !item.d.isPaid;
+
+      if (isLocked) {
+        // Locked result: show 🔒, dim it, and make it unclickable
+        li.className = "sd-locked";
+        li.style.cssText =
+          "opacity:0.45;cursor:not-allowed;pointer-events:none;user-select:none;";
+        const districtLine =
+          '<div class="sd-district">' + item.d.name + "</div>";
+        li.innerHTML =
+          '<span class="sd-emoji">🔒</span>' +
+          '<div class="sd-info">' +
+          '<div class="sd-name">' +
+          item.mkt.name +
+          "</div>" +
+          districtLine +
+          "</div>";
+      } else {
+        const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const highlighted = item.mkt.name.replace(
+          new RegExp("(" + esc + ")", "gi"),
+          "<mark>$1</mark>",
+        );
+        // Only show district name when searching globally (world screen)
+        const districtLine = isOnWorld
+          ? '<div class="sd-district">' + item.d.name + "</div>"
+          : "";
+        li.innerHTML =
+          '<span class="sd-emoji">' +
+          item.d.emoji +
+          "</span>" +
+          '<div class="sd-info">' +
+          '<div class="sd-name">' +
+          highlighted +
+          "</div>" +
+          districtLine +
+          "</div>";
+        li.addEventListener("click", () => executeSearch(idx));
+      }
+
       dropdown.appendChild(li);
     });
   }
@@ -4340,6 +4537,13 @@ function initializePersistence() {
     .querySelectorAll(".zoom-controls")
     .forEach((c) => c.classList.remove("hidden"));
 
+  // Load user's allowed districts from Firestore, then restore the screen.
+  // buildWorld() is called inside _restoreScreen() so the lock state is
+  // already populated when markers are created.
+  _loadUserDistricts().finally(() => _restoreScreen(lastScreen));
+}
+
+function _restoreScreen(lastScreen) {
   if (lastScreen === "worldScreen") {
     document.getElementById("worldScreen").classList.remove("hidden");
     setTimeout(() => {
