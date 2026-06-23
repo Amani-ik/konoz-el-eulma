@@ -22,10 +22,6 @@ import {
   orderBy,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import {
-  doc,
-  getDoc,
-} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 let NEWS_DATA = [];
 let SYSTEM_DATA = [];
@@ -5622,53 +5618,4 @@ function goToNewsMarket(newsId) {
   onAuthStateChanged(auth, (user) => {
     if (user) loadReviews();
   });
-})();
-// ──────────────────────────────────────────────────────────
-// 🔒 نظام حماية الواجهة وتشويش الـ DevTools (Console Warning)
-// ──────────────────────────────────────────────────────────
-
-(function () {
-  // 1. طباعة تحذير ضخم بالأحمر في الـ Console فور فتحها (مثل الصورة)
-  const warningTitle = "🛑 توقف! خطر أمني! 🛑";
-  const warningDesc =
-    "هذه الميزة مخصصة للمطورين فقط. إذا قام أي شخص بطلب نسخ ولصق أي كود هنا لتفعيل ميزة أو اختراق حساب، فإنك تمنحه إمكانية سرقة حسابك وأموالك في منصة كنوز العلمة.";
-
-  console.log(
-    `%c${warningTitle}`,
-    "color: red; font-size: 40px; font-weight: bold; text-shadow: 2px 2px black; font-family: sans-serif;",
-  );
-  console.log(
-    `%c${warningDesc}`,
-    "color: black; font-size: 16px; font-weight: bold; font-family: sans-serif; line-height: 1.5;",
-  );
-
-  // 2. منع الضغط على الزر الأيمن للفأرة (Right Click) لمنع "Inspect Element"
-  document.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-  });
-
-  // 3. منع اختصارات لوحة المفاتيح الشهيرة لفتح أدوات المطورين
-  document.addEventListener("keydown", (e) => {
-    // منع F12
-    if (e.key === "F12") {
-      e.preventDefault();
-    }
-    // منع Ctrl + Shift + I (فتح الـ Inspect)
-    if (e.ctrlKey && e.shiftKey && e.key === "I") {
-      e.preventDefault();
-    }
-    // منع Ctrl + Shift + J (فتح الـ Console مباشرة)
-    if (e.ctrlKey && e.shiftKey && e.key === "J") {
-      e.preventDefault();
-    }
-    // منع Ctrl + U (عرض كود الصفحة المصدر View Source)
-    if ((e.ctrlKey && e.key === "u") || (e.ctrlKey && e.key === "U")) {
-      e.preventDefault();
-    }
-  });
-
-  // 4. خدعة متقدمة (Debugger Loop) تشل حركة الـ Console إذا حاول محترف فتحها
-  setInterval(() => {
-    debugger;
-  }, 100);
 })();
