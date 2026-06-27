@@ -4,11 +4,13 @@
  */
 export const SUBSCRIPTION_CONFIG_SEED = {
   payment: {
-    ccp: "37233694525777",
-    baridimob: "S483823002W00000",
+    ccp: null,
+    baridimob: null,
+    redotpay: null,
+    paypal: null,
+    cashondelivery: null,
     holder: "كنوز العلمة",
   },
-  subscriptionDays: 30,
   plans: [
     {
       id: "single",
@@ -106,7 +108,6 @@ export const SUBSCRIPTION_CONFIG_SEED = {
  *   amount: number,
  *   districts: array,
  *   status: "pending",
- *   subscriptionType: "monthly_one_time",
  *   submittedAt: Timestamp
  * }
  *

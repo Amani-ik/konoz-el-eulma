@@ -62,6 +62,20 @@ async function checkAppVersion() {
 
 // 4. تشغيل الفحص مباشرة عند تحميل الصفحة
 window.addEventListener("DOMContentLoaded", checkAppVersion);
+
+// التحقق البرمجي من دعم المتصفح لعامل الخدمة قبل التسجيل
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/serviceworker.js")
+      .then((reg) =>
+        console.log("✓ تم تسجيل عامل الخدمة بنجاح في النطاق:", reg.scope),
+      )
+      .catch((err) =>
+        console.error("خطأ برميجي أثناء تسجيل عامل الخدمة:", err),
+      );
+  });
+}
 // ════════════════════════════════════════════════════════════════
 // ═══ District Access / Plan Locking ═══
 // ════════════════════════════════════════════════════════════════

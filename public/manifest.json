@@ -1,21 +1,33 @@
 {
   "short_name": "كنوز العلمة",
   "name": "منصة كنوز العلمة - دليل أسواق الجملة",
-  "icons": [
-    {
-      "src": "logo.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "logo.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ],
-  "start_url": "/index.html",
+  "start_url": "/",
   "background_color": "#0b2214",
   "theme_color": "#0b2214",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "531x525",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/logo.png",
+      "sizes": "531x525",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "واجهة الهاتف"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "531x525",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "واجهة الحاسوب"
+    }
+  ]
 }

@@ -68,10 +68,7 @@ function districtLabel(item) {
 
 function planLabel(planId) {
   return (
-    planLabels[planId] ||
-    localStorage.getItem("finalPlanName") ||
-    planId ||
-    "—"
+    planLabels[planId] || localStorage.getItem("finalPlanName") || planId || "—"
   );
 }
 
@@ -106,11 +103,25 @@ function renderPaymentDetails(payment) {
   document.getElementById("ccpNumber").textContent = payment.ccp || "—";
   document.getElementById("baridiRip").textContent = payment.baridimob || "—";
   document.getElementById("accountHolder").textContent = payment.holder || "—";
+  document.getElementById("redotpayId").textContent = payment.redotpay || "—";
+  document.getElementById("paypalId").textContent = payment.paypal || "—";
+  document.getElementById("cashondeliveryId").textContent =
+    payment.cashondelivery || "—";
 
-  const redotpayEl = document.getElementById("redotpayId");
+  /* const redotpayEl = document.getElementById("redotpayId");
   if (redotpayEl) {
     redotpayEl.textContent = payment.redotpay || "—";
   }
+
+  const paypalEl = document.getElementById("paypalId");
+  if (paypalEl) {
+    paypalEl.textContent = payment.paypal || "—";
+  }
+
+  const cashEl = document.getElementById("cashondeliveryId");
+  if (cashEl) {
+    cashEl.textContent = payment.cashondelivery || "—";
+  } */
 }
 
 function renderSummary(data) {

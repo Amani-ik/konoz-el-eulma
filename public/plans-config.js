@@ -1,8 +1,14 @@
-/** Fallback defaults when Firestore config/subscription is missing */
+/**
+ * Fallback defaults — used only when Firestore app_settings/payment_settings
+ * is unreachable. Primary source is always Firestore.
+ */
 export const DEFAULT_PAYMENT_DETAILS = {
-  ccp: "37233694525777",
-  baridimob: "S483823002W00000",
-  holder: "كنوز العلمة",
+  ccp: null,
+  baridimob: null,
+  redotpay: null,
+  paypal: null,
+  cashondelivery: null,
+  holder: "كنوز العلمة", // kept hardcoded — add "holder" field in Firestore to override
 };
 
 export const DEFAULT_PLANS = [
