@@ -9,22 +9,21 @@
   "icons": [
     {
       "src": "/logo.png",
-      "sizes": "531x525",
-      "type": "image/png",
-      "purpose": "any"
+      "sizes": "192x192",
+      "type": "image/png"
     }
   ],
   "screenshots": [
     {
-      "src": "/logo.png",
-      "sizes": "531x525",
+      "src": "/screenshotmob.png",
+      "sizes": "645x1280",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "واجهة الهاتف"
     },
     {
-      "src": "/logo.png",
-      "sizes": "531x525",
+      "src": "/screenshotpc.png",
+      "sizes": "1918x895",
       "type": "image/png",
       "form_factor": "wide",
       "label": "واجهة الحاسوب"
