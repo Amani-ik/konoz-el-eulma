@@ -993,6 +993,11 @@
           <i class="fa-solid fa-users"></i>
           <span>المستخدمون</span>
         </button>
+        <button type="button" class="nav-link" data-tab="additional" id="navAdditional">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>طلبات إضافة أسواق</span>
+          <span class="nav-badge" id="sidebarAdditionalCount" style="display:none">0</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -1059,6 +1064,13 @@
               <div class="metric-value" id="metricTotal">0</div>
               <div class="metric-label">إجمالي المستخدمين</div>
             </article>
+            <article class="metric-card" style="--mc-accent:var(--blue);">
+              <div class="metric-icon" style="background:var(--blue-dim);color:var(--blue);">
+                <i class="fa-solid fa-map-location-dot"></i>
+              </div>
+              <div class="metric-value" id="overviewAdditionalCount" style="color:var(--blue);">0</div>
+              <div class="metric-label">طلبات إضافة أسواق</div>
+            </article>
           </div>
 
           <!-- Quick pending on overview -->
@@ -1124,6 +1136,38 @@
                   <tbody id="pendingTableBody2">
                     <tr class="empty-row">
                       <td colspan="9">لا توجد طلبات معلقة</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Additional Payments tab -->
+        <div class="tab-panel" id="tab-additional">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">
+                <i class="fa-solid fa-map-location-dot"></i> طلبات إضافة أسواق
+              </span>
+              <span class="panel-count" id="additionalTabCount">0</span>
+            </div>
+            <div class="panel-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>معرّف المستخدم</th>
+                      <th>الأسواق المطلوبة</th>
+                      <th>تاريخ الطلب</th>
+                      <th>إيصال الدفع</th>
+                      <th>إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="additionalTableBody">
+                    <tr class="empty-row">
+                      <td colspan="5">لا توجد طلبات إضافة أسواق</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1252,6 +1296,7 @@
       const tabTitles = {
         overview: "نظرة عامة",
         pending: "قيد الانتظار",
+        additional: "طلبات إضافة أسواق",
         users: "إدارة المستخدمين",
       };
 

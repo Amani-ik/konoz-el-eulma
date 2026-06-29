@@ -1868,7 +1868,7 @@ wC.addEventListener("touchend", (e) => {
 function enterDistrict(d, evt, onReady) {
   // Block entry if district is not paid
   if (!d.isPaid) {
-    openComingSoon();
+    openDistrictUpgrade(d);
     return;
   }
 
@@ -2111,6 +2111,199 @@ document.addEventListener("keydown", (e) => {
   if (!o || !o.classList.contains("on")) return;
   closeComingSoon();
 });
+
+// ════════════════════════════════════════════════════════════════
+// ═══ District Upgrade / Additional Payment Modal ═══
+// ════════════════════════════════════════════════════════════════
+
+/** The district the user clicked on but doesn't have access to yet. */
+let _upgradeTargetDistrict = null;
+
+/**
+ * Lazily injects the upgrade modal into the DOM on first use so it works
+ * even if the snippet was not added to index.html manually.
+ */
+function _ensureUpgradeModal() {
+  if (document.getElementById("districtUpgradeOverlay")) return;
+
+  // Inject CSS once
+  if (!document.getElementById("_upgradeModalStyle")) {
+    const style = document.createElement("style");
+    style.id = "_upgradeModalStyle";
+    style.textContent = `
+      #districtUpgradeOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(6,18,10,0.85);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 3000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+        padding: 24px;
+      }
+      #districtUpgradeOverlay.on {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .upgrade-card {
+        background: #0e1912;
+        border: 1px solid rgba(62,207,122,0.2);
+        border-radius: 20px;
+        padding: 36px 32px 30px;
+        max-width: 380px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+        animation: _upgradeIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+      }
+      @keyframes _upgradeIn {
+        from { transform: translateY(20px) scale(0.96); opacity: 0; }
+        to   { transform: none; opacity: 1; }
+      }
+      .upgrade-lock-icon {
+        width: 64px; height: 64px;
+        background: rgba(62,207,122,0.1);
+        border: 1.5px solid rgba(62,207,122,0.25);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.8rem;
+        margin: 0 auto 16px;
+      }
+      .upgrade-title {
+        font-size: 1.05rem; font-weight: 900; color: #e4f0e8;
+        margin-bottom: 8px; line-height: 1.4;
+      }
+      .upgrade-district-name { color: #3ecf7a; }
+      .upgrade-subtitle {
+        font-size: 0.84rem; color: rgba(228,240,232,0.52);
+        margin-bottom: 26px; line-height: 1.6;
+      }
+      .upgrade-actions { display: flex; flex-direction: column; gap: 10px; }
+      .upgrade-btn-confirm {
+        background: #3ecf7a; color: #061208;
+        border: none; border-radius: 12px;
+        padding: 13px 20px;
+        font-family: inherit; font-size: 0.92rem; font-weight: 900;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        transition: background 0.18s, transform 0.15s;
+      }
+      .upgrade-btn-confirm:hover { background: #4ddf8a; transform: translateY(-1px); }
+      .upgrade-btn-cancel {
+        background: transparent;
+        color: rgba(228,240,232,0.42);
+        border: 1px solid rgba(62,207,122,0.12);
+        border-radius: 12px; padding: 11px 20px;
+        font-family: inherit; font-size: 0.84rem; font-weight: 700;
+        cursor: pointer;
+        transition: color 0.18s, border-color 0.18s;
+      }
+      .upgrade-btn-cancel:hover { color: rgba(228,240,232,0.7); border-color: rgba(62,207,122,0.25); }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Inject HTML
+  const overlay = document.createElement("div");
+  overlay.id = "districtUpgradeOverlay";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.innerHTML = `
+    <div class="upgrade-card">
+      <div class="upgrade-lock-icon">
+        <span class="upgrade-district-emoji">🔒</span>
+      </div>
+      <div class="upgrade-title">
+        السوق مغلق — <span class="upgrade-district-name"></span>
+      </div>
+      <p class="upgrade-subtitle">
+        هذا السوق غير مشمول في اشتراكك الحالي.<br>
+        يمكنك إضافته بدفع رسوم إضافية ورفع إيصال الدفع للمراجعة.
+      </p>
+      <div class="upgrade-actions">
+        <button class="upgrade-btn-confirm" id="_upgradeConfirmBtn">
+          <i class="fa-solid fa-lock-open"></i>
+          فتح هذا السوق — ادفع وارفع الإيصال
+        </button>
+        <button class="upgrade-btn-cancel" id="_upgradeCancelBtn">
+          إلغاء
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Wire buttons once
+  overlay.querySelector("#_upgradeConfirmBtn").addEventListener("click", requestDistrictUpgrade);
+  overlay.querySelector("#_upgradeCancelBtn").addEventListener("click", closeDistrictUpgrade);
+
+  // Backdrop click closes
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeDistrictUpgrade();
+  });
+}
+
+/**
+ * Opens the "unlock this district" modal, pre-filling the district info.
+ * Called when a user clicks a locked district marker on the world map.
+ */
+function openDistrictUpgrade(district) {
+  _upgradeTargetDistrict = district;
+  _ensureUpgradeModal();
+
+  const overlay = document.getElementById("districtUpgradeOverlay");
+  const nameEl = overlay.querySelector(".upgrade-district-name");
+  const emojiEl = overlay.querySelector(".upgrade-district-emoji");
+  if (nameEl) nameEl.textContent = district.name || "";
+  if (emojiEl) emojiEl.textContent = district.emoji || "🔒";
+
+  overlay.classList.add("on");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function closeDistrictUpgrade() {
+  const overlay = document.getElementById("districtUpgradeOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("on");
+  overlay.setAttribute("aria-hidden", "true");
+  _upgradeTargetDistrict = null;
+}
+
+/**
+ * Called when the user taps "Unlock" inside the upgrade modal.
+ * Stores the target district in localStorage then redirects to payment.html.
+ */
+function requestDistrictUpgrade() {
+  if (!_upgradeTargetDistrict) return;
+
+  const district = {
+    id: _upgradeTargetDistrict.id || "",
+    name: _upgradeTargetDistrict.name || "",
+    emoji: _upgradeTargetDistrict.emoji || "",
+  };
+
+  localStorage.setItem("additionalPaymentMode", "true");
+  localStorage.setItem("additionalDistricts", JSON.stringify([district]));
+
+  closeDistrictUpgrade();
+  window.location.href = "payment.html";
+}
+
+// ESC closes the upgrade modal
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const o = document.getElementById("districtUpgradeOverlay");
+    if (o && o.classList.contains("on")) closeDistrictUpgrade();
+  }
+});
+
+window.closeDistrictUpgrade = closeDistrictUpgrade;
+window.requestDistrictUpgrade = requestDistrictUpgrade;
 
 // Tap background closes mini card
 document.getElementById("dCanvas").addEventListener("click", (e) => {
@@ -5562,6 +5755,9 @@ function goToNewsMarket(newsId) {
   window.closeMiniCard = closeMiniCard;
   window.openComingSoon = openComingSoon;
   window.closeComingSoon = closeComingSoon;
+  window.openDistrictUpgrade = openDistrictUpgrade;
+  window.closeDistrictUpgrade = closeDistrictUpgrade;
+  window.requestDistrictUpgrade = requestDistrictUpgrade;
 
   // Search
   window.toggleSearch = toggleSearch;

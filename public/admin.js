@@ -5,10 +5,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   onSnapshot,
   writeBatch,
+  arrayUnion,
   serverTimestamp,
   Timestamp,
   deleteField,
@@ -39,6 +41,12 @@ const logoutBtn = document.getElementById("logoutBtn");
 const receiptLightbox = document.getElementById("receiptLightbox");
 const lightboxImage = document.getElementById("lightboxImage");
 const lightboxClose = document.getElementById("lightboxClose");
+
+// Additional payments tab elements
+const additionalTableBody = document.getElementById("additionalTableBody");
+const additionalTabCount = document.getElementById("additionalTabCount");
+const sidebarAdditionalCount = document.getElementById("sidebarAdditionalCount");
+const overviewAdditionalCount = document.getElementById("overviewAdditionalCount");
 
 let unsubscribers = [];
 let allUsersCache = [];
@@ -426,6 +434,174 @@ async function setAccountDisabled(userId, disabled) {
   await batch.commit();
 }
 
+// ════════════════════════════════════════════════════════════════
+// ═══ Additional Districts Payment Requests ═══
+// ════════════════════════════════════════════════════════════════
+
+function renderAdditionalRow(requestId, userId, data) {
+  const receiptUrl = data.submittedReceiptUrl || "";
+  const safeReceipt = escapeHtml(receiptUrl);
+  const thumb = receiptUrl
+    ? `<img class="receipt-thumb" src="${safeReceipt}" alt="إيصال" data-receipt="${safeReceipt}" />`
+    : `<span style="color:var(--text-3)">لا يوجد</span>`;
+
+  const districts = Array.isArray(data.requestedDistricts)
+    ? data.requestedDistricts
+    : [];
+  const districtsCell = districts.length
+    ? `<div class="district-tags">${districts
+        .map((d) => {
+          const name = typeof d === "object" ? d.name || d.id : String(d);
+          const emoji = typeof d === "object" ? d.emoji || "" : "";
+          return `<span class="district-tag">${emoji ? escapeHtml(emoji) + " " : ""}${escapeHtml(name)}</span>`;
+        })
+        .join("")}</div>`
+    : `<span style="color:var(--text-3)">—</span>`;
+
+  // Format submitted date
+  let submittedDate = "—";
+  if (data.submittedAt) {
+    try {
+      const d =
+        typeof data.submittedAt.toDate === "function"
+          ? data.submittedAt.toDate()
+          : new Date(data.submittedAt);
+      submittedDate = d.toLocaleDateString("ar-DZ");
+    } catch {
+      submittedDate = "—";
+    }
+  }
+
+  return `
+    <tr data-uid="${escapeHtml(userId)}" data-req-id="${escapeHtml(requestId)}">
+      <td class="mono">${escapeHtml(userId)}</td>
+      <td>${districtsCell}</td>
+      <td class="mono">${escapeHtml(submittedDate)}</td>
+      <td>${thumb}</td>
+      <td>
+        <div class="row-actions">
+          <button type="button" class="btn btn-primary btn-sm btn-approve-additional"
+            data-uid="${escapeHtml(userId)}" data-req-id="${escapeHtml(requestId)}">
+            <i class="fa-solid fa-plus"></i> تأكيد الإضافة
+          </button>
+          <button type="button" class="btn btn-danger btn-sm btn-reject-additional"
+            data-uid="${escapeHtml(userId)}" data-req-id="${escapeHtml(requestId)}">
+            <i class="fa-solid fa-xmark"></i> رفض
+          </button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderAdditionalTable(requests) {
+  const html = requests.length
+    ? requests
+        .map(({ requestId, userId, data }) =>
+          renderAdditionalRow(requestId, userId, data)
+        )
+        .join("")
+    : `<tr class="empty-row"><td colspan="5">لا توجد طلبات إضافة أسواق</td></tr>`;
+
+  if (additionalTableBody) additionalTableBody.innerHTML = html;
+
+  const countStr = String(requests.length);
+  if (additionalTabCount) additionalTabCount.textContent = countStr;
+  if (overviewAdditionalCount) overviewAdditionalCount.textContent = countStr;
+  if (sidebarAdditionalCount) {
+    sidebarAdditionalCount.textContent = countStr;
+    sidebarAdditionalCount.style.display = requests.length ? "" : "none";
+  }
+}
+
+/**
+ * Approve an additional district request:
+ * - arrayUnion the requested districts into users/{uid}.districts
+ * - Mark the subcollection doc status = "approved"
+ */
+async function approveAdditionalRequest(userId, requestId, requestData) {
+  const districts = Array.isArray(requestData.requestedDistricts)
+    ? requestData.requestedDistricts
+    : [];
+  if (!districts.length) throw new Error("No districts in request.");
+
+  const batch = writeBatch(db);
+
+  const userRef = doc(db, "users", userId);
+  // Merge new districts into the existing array, avoiding duplicates
+  batch.update(userRef, {
+    districts: arrayUnion(...districts),
+    updated_at: serverTimestamp(),
+  });
+
+  const reqRef = doc(
+    db,
+    "users",
+    userId,
+    "additionalPaymentRequests",
+    requestId
+  );
+  batch.update(reqRef, {
+    status: "approved",
+    approvedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
+}
+
+/**
+ * Reject an additional district request:
+ * - Mark the subcollection doc status = "rejected"
+ */
+async function rejectAdditionalRequest(userId, requestId) {
+  const batch = writeBatch(db);
+  const reqRef = doc(
+    db,
+    "users",
+    userId,
+    "additionalPaymentRequests",
+    requestId
+  );
+  batch.update(reqRef, {
+    status: "rejected",
+    rejectedAt: serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+function startAdditionalPaymentsListener() {
+  // Listen to all additionalPaymentRequests subcollections using collectionGroup
+  const q = collectionGroup(db, "additionalPaymentRequests");
+  unsubscribers.push(
+    onSnapshot(
+      q,
+      (snap) => {
+        const pending = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          // Only show pending ones
+          if (data.status === "pending_additional") {
+            // Extract userId from path: users/{uid}/additionalPaymentRequests/{reqId}
+            const userId = docSnap.ref.parent.parent?.id || data.userId || "";
+            pending.push({
+              requestId: docSnap.id,
+              userId,
+              data,
+            });
+          }
+        });
+        renderAdditionalTable(pending);
+      },
+      (err) => {
+        console.error("additionalPaymentRequests onSnapshot:", err);
+        if (additionalTableBody) {
+          additionalTableBody.innerHTML = `<tr class="empty-row"><td colspan="5">تعذر تحميل طلبات الإضافة — تحقق من قواعد الأمان.</td></tr>`;
+        }
+      }
+    )
+  );
+}
+
 function bindTableActions() {
   document.addEventListener("click", async (e) => {
     const approveBtn = e.target.closest(".btn-approve");
@@ -526,6 +702,63 @@ function bindTableActions() {
       return;
     }
 
+    // ── Additional payment: approve ──
+    const approveAdditional = e.target.closest(".btn-approve-additional");
+    if (approveAdditional) {
+      const uid = approveAdditional.dataset.uid;
+      const reqId = approveAdditional.dataset.reqId;
+      if (!uid || !reqId || approveAdditional.disabled) return;
+
+      const confirmed = confirm(
+        "تأكيد إضافة الأسواق الجديدة لهذا المستخدم؟"
+      );
+      if (!confirmed) return;
+
+      approveAdditional.disabled = true;
+      try {
+        const reqRef = doc(
+          db,
+          "users",
+          uid,
+          "additionalPaymentRequests",
+          reqId
+        );
+        const snap = await getDoc(reqRef);
+        if (!snap.exists() || snap.data().status !== "pending_additional") {
+          alert("هذا الطلب لم يعد معلقاً.");
+          approveAdditional.disabled = false;
+          return;
+        }
+        await approveAdditionalRequest(uid, reqId, snap.data());
+      } catch (err) {
+        console.error("approveAdditionalRequest:", err);
+        alert("فشلت الموافقة: " + err.message);
+        approveAdditional.disabled = false;
+      }
+      return;
+    }
+
+    // ── Additional payment: reject ──
+    const rejectAdditional = e.target.closest(".btn-reject-additional");
+    if (rejectAdditional) {
+      const uid = rejectAdditional.dataset.uid;
+      const reqId = rejectAdditional.dataset.reqId;
+      if (!uid || !reqId || rejectAdditional.disabled) return;
+
+      const confirmed = confirm("رفض طلب إضافة الأسواق هذا؟");
+      if (!confirmed) return;
+
+      rejectAdditional.disabled = true;
+      try {
+        await rejectAdditionalRequest(uid, reqId);
+      } catch (err) {
+        console.error("rejectAdditionalRequest:", err);
+        alert("فشل الرفض: " + err.message);
+        rejectAdditional.disabled = false;
+      }
+      return;
+    }
+
     const thumb = e.target.closest(".receipt-thumb");
     if (thumb?.dataset.receipt) {
       openLightbox(thumb.dataset.receipt);
@@ -551,6 +784,7 @@ function applyUsersSnapshot(users) {
 }
 
 function startListeners() {
+  startAdditionalPaymentsListener();
   unsubscribers.push(
     onSnapshot(
       collection(db, "users"),

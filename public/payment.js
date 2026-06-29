@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import {
   doc,
   setDoc,
+  collection,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { loadSubscriptionConfig } from "./subscription-service.js";
@@ -21,6 +22,11 @@ const SESSION_KEYS = [
   "pendingFullName",
   "pendingPhone",
   "pendingDob",
+];
+
+const ADDITIONAL_KEYS = [
+  "additionalPaymentMode",
+  "additionalDistricts",
 ];
 
 const loader = document.getElementById("loader");
@@ -42,9 +48,16 @@ const progressPct = document.getElementById("progressPct");
 const otherMethodsToggle = document.getElementById("otherMethodsToggle");
 const otherMethodsPanel = document.getElementById("otherMethodsPanel");
 
+// ── Additional-payment-specific UI elements (may not exist in base payment.html)
+const summaryPlanRow = document.getElementById("summaryPlanRow");
+const summaryPriceRow = document.getElementById("summaryPriceRow");
+const paymentModeLabel = document.getElementById("paymentModeLabel");
+
 let planLabels = {};
 let selectedFile = null;
 let checkoutData = null;
+let isAdditionalMode = false;
+let additionalDistricts = [];
 
 function redirect(path) {
   window.location.replace(path);
@@ -82,6 +95,10 @@ function clearCheckoutSession() {
   SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
 }
 
+function clearAdditionalSession() {
+  ADDITIONAL_KEYS.forEach((k) => localStorage.removeItem(k));
+}
+
 function readCheckoutSession() {
   const finalPlanId = localStorage.getItem("finalPlanId");
   if (!finalPlanId) return null;
@@ -91,6 +108,12 @@ function readCheckoutSession() {
     finalPrice: localStorage.getItem("finalPrice") || "0",
     finalDistricts: parseDistricts(localStorage.getItem("finalDistricts")),
   };
+}
+
+function readAdditionalSession() {
+  const mode = localStorage.getItem("additionalPaymentMode");
+  if (mode !== "true") return null;
+  return parseDistricts(localStorage.getItem("additionalDistricts"));
 }
 
 function showScreen(screen) {
@@ -107,24 +130,30 @@ function renderPaymentDetails(payment) {
   document.getElementById("paypalId").textContent = payment.paypal || "—";
   document.getElementById("cashondeliveryId").textContent =
     payment.cashondelivery || "—";
-
-  /* const redotpayEl = document.getElementById("redotpayId");
-  if (redotpayEl) {
-    redotpayEl.textContent = payment.redotpay || "—";
-  }
-
-  const paypalEl = document.getElementById("paypalId");
-  if (paypalEl) {
-    paypalEl.textContent = payment.paypal || "—";
-  }
-
-  const cashEl = document.getElementById("cashondeliveryId");
-  if (cashEl) {
-    cashEl.textContent = payment.cashondelivery || "—";
-  } */
 }
 
 function renderSummary(data) {
+  if (isAdditionalMode) {
+    // Hide plan/price rows in additional mode — only districts matter
+    if (summaryPlanRow) summaryPlanRow.style.display = "none";
+    if (summaryPriceRow) summaryPriceRow.style.display = "none";
+    if (paymentModeLabel) {
+      paymentModeLabel.textContent = "طلب إضافة أسواق";
+      paymentModeLabel.style.display = "";
+    }
+
+    const districts = additionalDistricts.map(districtLabel).filter(Boolean);
+    summaryDistricts.innerHTML = districts.length
+      ? districts
+          .map((d) => `<span class="chip">${escapeHtml(d)}</span>`)
+          .join("")
+      : `<span class="chip">—</span>`;
+
+    // Update submit button label
+    if (submitLabel) submitLabel.textContent = "إرسال طلب إضافة الأسواق";
+    return;
+  }
+
   summaryPlan.textContent = data.finalPlanName || planLabel(data.finalPlanId);
   summaryPrice.textContent = formatPrice(data.finalPrice);
 
@@ -292,6 +321,50 @@ function uploadReceipt(userId, file) {
   });
 }
 
+// ════════════════════════════════════════════════════════════
+// ═══ ADDITIONAL DISTRICTS PAYMENT SUBMISSION ═══
+// ════════════════════════════════════════════════════════════
+async function submitAdditionalPayment(user) {
+  if (!selectedFile || !additionalDistricts.length) return;
+
+  submitBtn.disabled = true;
+  submitBtn.classList.add("loading");
+  if (submitLabel) submitLabel.textContent = "جاري الإرسال…";
+  errorMsg.textContent = "";
+
+  try {
+    const upload = await uploadReceipt(user.uid, selectedFile);
+    setUploadProgress(100, selectedFile.name);
+
+    // Write to users/{uid}/additionalPaymentRequests/{autoId}
+    const reqRef = doc(
+      collection(db, "users", user.uid, "additionalPaymentRequests")
+    );
+
+    await setDoc(reqRef, {
+      requestId: reqRef.id,
+      userId: user.uid,
+      requestedDistricts: additionalDistricts,
+      submittedReceiptUrl: upload.url,
+      receiptThumbUrl: upload.thumbUrl || null,
+      status: "pending_additional",
+      submittedAt: serverTimestamp(),
+    });
+
+    clearAdditionalSession();
+    window.location.replace("pending.html");
+  } catch (err) {
+    console.error("Additional payment submission failed:", err);
+    errorMsg.textContent = "فشل رفع الإيصال: " + err.message;
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("loading");
+    if (submitLabel) submitLabel.textContent = "إرسال طلب إضافة الأسواق";
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ═══ STANDARD PAYMENT SUBMISSION ═══
+// ════════════════════════════════════════════════════════════
 async function submitForApproval(user) {
   if (!selectedFile || !checkoutData) return;
 
@@ -336,13 +409,32 @@ async function submitForApproval(user) {
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// ═══ PAGE INIT ═══
+// ════════════════════════════════════════════════════════════
 async function initPaymentPage(user) {
-  checkoutData = readCheckoutSession();
-  if (!checkoutData) {
-    redirect("pricing.html");
-    return;
+  // 1. Detect mode
+  const additionalRaw = readAdditionalSession();
+  if (additionalRaw !== null) {
+    // Additional districts mode
+    isAdditionalMode = true;
+    additionalDistricts = additionalRaw;
+
+    if (!additionalDistricts.length) {
+      // Nothing to add — send back
+      redirect("index.html");
+      return;
+    }
+  } else {
+    // Standard new-subscription mode
+    checkoutData = readCheckoutSession();
+    if (!checkoutData) {
+      redirect("pricing.html");
+      return;
+    }
   }
 
+  // 2. Load payment config (CCP, Baridimob, etc.)
   try {
     const config = await loadSubscriptionConfig();
     planLabels = config.planLabels;
@@ -352,18 +444,26 @@ async function initPaymentPage(user) {
     errorMsg.textContent = "تعذر تحميل بيانات الدفع.";
   }
 
+  // 3. Render summary
   renderSummary(checkoutData);
+
+  // 4. Bind UI
   bindCopyButtons();
   bindOtherMethodsToggle();
   bindUploadUI();
-  submitBtn.addEventListener("click", () => submitForApproval(user));
+
+  // 5. Submit handler — branches on mode
+  submitBtn.addEventListener("click", () => {
+    if (isAdditionalMode) {
+      submitAdditionalPayment(user);
+    } else {
+      submitForApproval(user);
+    }
+  });
+
   showScreen("payment");
 }
 
-// Same grace-period guard as pricing.js: avoid bouncing to index.html on a
-// transient `user = null` callback right after a fresh navigation on a
-// deployed (non-localhost) origin, where Firebase Auth persistence may not
-// have fully settled yet.
 let authCheckResolved = false;
 
 onAuthStateChanged(auth, (user) => {
