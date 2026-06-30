@@ -260,6 +260,17 @@ async function startSessionMonitor(userId) {
         } catch (e) {}
         // clear local token, unsubscribe, sign out and reload
         localStorage.removeItem("active_device_session");
+        // IMPORTANT: clear the persisted session/app-state so that on reload
+        // the app does NOT auto-restore into the app screen. Without this,
+        // initializePersistence()/_restoreScreen() would see "savedUser"
+        // still present and re-enter the app even though Firebase auth was
+        // just signed out, making it look like the user "auto logged in"
+        // after the session was terminated.
+        localStorage.removeItem("savedUser");
+        localStorage.setItem("lastScreen", "loginScreen");
+        localStorage.removeItem("lastDistIdx");
+        localStorage.removeItem("lastMiniCardOpen");
+        localStorage.removeItem("lastMarketId");
         if (CURRENT_SESSION_UNSUB) {
           try {
             CURRENT_SESSION_UNSUB();

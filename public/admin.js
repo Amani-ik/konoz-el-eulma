@@ -50,8 +50,11 @@ const overviewAdditionalCount = document.getElementById("overviewAdditionalCount
 
 let unsubscribers = [];
 let allUsersCache = [];
+let pendingCache = [];
 let searchFilter = "";
 let statusFilter = "";
+let pendingSort = { dir: null };
+let usersSort = { field: null, dir: null };
 
 function hideGate() {
   if (gateLoader) gateLoader.style.display = "none";
@@ -97,6 +100,78 @@ function fullNameOf(data = {}) {
 
 function usernameOf(data = {}) {
   return data.username || "—";
+}
+
+function formatTimestamp(value) {
+  if (!value) return "—";
+  try {
+    const d =
+      typeof value === "object" && typeof value.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
+    if (isNaN(d.getTime())) return "—";
+    return `${d.toLocaleDateString("ar-DZ")} ${d.toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  } catch {
+    return "—";
+  }
+}
+
+function tsMillis(value) {
+  if (!value) return 0;
+  try {
+    const d =
+      typeof value === "object" && typeof value.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
+    const t = d.getTime();
+    return isNaN(t) ? 0 : t;
+  } catch {
+    return 0;
+  }
+}
+
+function sortByDate(list, getValue, dir) {
+  if (!dir) return list;
+  return [...list].sort((a, b) => {
+    const diff = tsMillis(getValue(a)) - tsMillis(getValue(b));
+    return dir === "asc" ? diff : -diff;
+  });
+}
+
+function rawCreatedAtOf(data = {}) {
+  return (
+    data.createdAt ||
+    data.created_at ||
+    data.registeredAt ||
+    data.submittedAt ||
+    data.requestedAt ||
+    null
+  );
+}
+
+function rawApprovedAtOf(data = {}) {
+  return data.approvedAt || data.activatedAt || null;
+}
+
+function rawUpdatedAtOf(data = {}) {
+  return data.updatedAt || data.updated_at || null;
+}
+
+function createdAtOf(data = {}) {
+  return formatTimestamp(rawCreatedAtOf(data));
+}
+
+function approvedAtOf(data = {}) {
+  return formatTimestamp(rawApprovedAtOf(data));
+}
+
+function updatedAtOf(data = {}) {
+  return formatTimestamp(rawUpdatedAtOf(data));
+}
+
+function submittedAtOf(data = {}) {
+  const value = data.submittedAt || data.createdAt || data.requestedAt || "";
+  return formatTimestamp(value);
 }
 
 function dateOfBirthOf(data = {}) {
@@ -160,7 +235,7 @@ function statusPill(status = "") {
 function showDataError(message) {
   const text = escapeHtml(message || "تعذر تحميل البيانات");
   const pendingHtml = `<tr class="empty-row"><td colspan="9">${text}</td></tr>`;
-  const usersHtml = `<tr class="empty-row"><td colspan="6">${text}</td></tr>`;
+  const usersHtml = `<tr class="empty-row"><td colspan="9">${text}</td></tr>`;
   if (pendingTableBody) pendingTableBody.innerHTML = pendingHtml;
   if (pendingTableBody2) pendingTableBody2.innerHTML = pendingHtml;
   if (usersTableBody) usersTableBody.innerHTML = usersHtml;
@@ -216,7 +291,7 @@ function renderPendingRow(id, data) {
       <td class="mono">${escapeHtml(usernameOf(data))}</td>
       <td class="mono">${escapeHtml(data.email || "—")}</td>
       <td class="mono">${escapeHtml(data.phone || "—")}</td>
-      <td class="mono">${escapeHtml(dateOfBirthOf(data))}</td>
+      <td class="mono">${escapeHtml(createdAtOf(data))}</td>
       <td>${planCell}</td>
       <td>${districtsCell}</td>
       <td>${thumb}</td>
@@ -235,8 +310,11 @@ function renderPendingRow(id, data) {
 }
 
 function renderPendingTable(docs) {
-  const html = docs.length
-    ? docs.map(({ id, data }) => renderPendingRow(id, data)).join("")
+  pendingCache = docs;
+  const sorted = sortByDate(docs, ({ data }) => rawCreatedAtOf(data), pendingSort.dir);
+
+  const html = sorted.length
+    ? sorted.map(({ id, data }) => renderPendingRow(id, data)).join("")
     : `<tr class="empty-row"><td colspan="9">لا توجد طلبات معلقة</td></tr>`;
 
   if (pendingTableBody) pendingTableBody.innerHTML = html;
@@ -249,6 +327,7 @@ function renderPendingTable(docs) {
     sidebarPendingCount.textContent = countStr;
     sidebarPendingCount.style.display = docs.length ? "" : "none";
   }
+  updateSortIndicators();
 }
 
 function matchesSearch(data, term) {
@@ -272,12 +351,23 @@ function filterUsers(users) {
 function renderUsersTable(users) {
   if (!usersTableBody) return;
 
-  const filtered = filterUsers(users);
+  let filtered = filterUsers(users);
+  filtered = sortByDate(
+    filtered,
+    ({ data }) => {
+      if (usersSort.field === "approvedAt") return rawApprovedAtOf(data);
+      if (usersSort.field === "updatedAt") return rawUpdatedAtOf(data);
+      if (usersSort.field === "createdAt") return rawCreatedAtOf(data);
+      return null;
+    },
+    usersSort.dir,
+  );
 
   if (!filtered.length) {
     usersTableBody.innerHTML = `
-      <tr class="empty-row"><td colspan="6">لا توجد نتائج</td></tr>
+      <tr class="empty-row"><td colspan="9">لا توجد نتائج</td></tr>
     `;
+    updateSortIndicators();
     return;
   }
 
@@ -306,6 +396,9 @@ function renderUsersTable(users) {
           <td class="mono">${escapeHtml(data.phone || "—")}</td>
           <td>${statusPill(accountStatus(data))}</td>
           <td>${sessionEl}</td>
+          <td class="mono">${escapeHtml(createdAtOf(data))}</td>
+          <td class="mono">${escapeHtml(approvedAtOf(data))}</td>
+          <td class="mono">${escapeHtml(updatedAtOf(data))}</td>
           <td>
             <div class="row-actions">
               <button type="button" class="btn btn-warn btn-sm btn-reset-session" data-uid="${escapeHtml(id)}" ${sessionActive ? "" : "disabled"}>
@@ -318,6 +411,7 @@ function renderUsersTable(users) {
       `;
     })
     .join("");
+  updateSortIndicators();
 }
 
 async function approveUser(userId, userData) {
@@ -894,10 +988,50 @@ function cleanup() {
   unsubscribers = [];
 }
 
+function setPendingSort(dir) {
+  pendingSort = { dir };
+  renderPendingTable(pendingCache);
+}
+
+function setUsersSort(field, dir) {
+  usersSort = { field, dir };
+  renderUsersTable(allUsersCache);
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    const key = btn.dataset.sortKey;
+    const dir = btn.dataset.dir;
+    let active = false;
+    if (key === "pending") active = pendingSort.dir === dir;
+    else if (key === "usersCreatedAt")
+      active = usersSort.field === "createdAt" && usersSort.dir === dir;
+    else if (key === "usersApprovedAt")
+      active = usersSort.field === "approvedAt" && usersSort.dir === dir;
+    else if (key === "usersUpdatedAt")
+      active = usersSort.field === "updatedAt" && usersSort.dir === dir;
+    btn.classList.toggle("active", active);
+  });
+}
+
+function bindSortControls() {
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.sortKey;
+      const dir = btn.dataset.dir;
+      if (key === "pending") setPendingSort(dir);
+      else if (key === "usersCreatedAt") setUsersSort("createdAt", dir);
+      else if (key === "usersApprovedAt") setUsersSort("approvedAt", dir);
+      else if (key === "usersUpdatedAt") setUsersSort("updatedAt", dir);
+    });
+  });
+}
+
 bindTableActions();
 bindSearch();
 bindLightbox();
 bindLogout();
+bindSortControls();
 
 onAuthStateChanged(auth, async (user) => {
   cleanup();
