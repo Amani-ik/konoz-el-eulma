@@ -2908,6 +2908,7 @@ body.light-mode #userMenuPanel .theme-toggle-btn:hover {
   color: rgba(255, 255, 255, 0.85);
   font-size: 25px;
   cursor: pointer;
+  text-decoration: none;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
