@@ -2250,8 +2250,12 @@ function _ensureUpgradeModal() {
   document.body.appendChild(overlay);
 
   // Wire buttons once
-  overlay.querySelector("#_upgradeConfirmBtn").addEventListener("click", requestDistrictUpgrade);
-  overlay.querySelector("#_upgradeCancelBtn").addEventListener("click", closeDistrictUpgrade);
+  overlay
+    .querySelector("#_upgradeConfirmBtn")
+    .addEventListener("click", requestDistrictUpgrade);
+  overlay
+    .querySelector("#_upgradeCancelBtn")
+    .addEventListener("click", closeDistrictUpgrade);
 
   // Backdrop click closes
   overlay.addEventListener("click", (e) => {
@@ -3444,9 +3448,9 @@ function toSc(f, t) {
   document.getElementById(t).classList.remove("hidden");
   localStorage.setItem("lastScreen", t);
 
-  // Hide customer service button on login screen or profile screen
+  // Keep customer service button visible on login screens, hide only on profile screens
   const csBtn = document.getElementById("csBtn");
-  if (t === "loginScreen" || t === "profileScreen") {
+  if (t === "profileScreen") {
     csBtn.style.display = "none";
   } else {
     csBtn.style.display = "flex";
@@ -4703,9 +4707,9 @@ function initializePersistence() {
   _updateUnreadDots();
   setTimeout(fetchWeather, 1200);
 
-  // Hide customer service button initially on login screen
+  // Keep customer service button visible on the login screen by default
   const csBtn = document.getElementById("csBtn");
-  csBtn.style.display = "none";
+  if (csBtn) csBtn.style.display = "flex";
 
   // a) Restaurer l'utilisateur
   const savedUser = localStorage.getItem("savedUser");

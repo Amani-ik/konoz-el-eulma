@@ -244,19 +244,8 @@ body {
   box-shadow: 0 14px 42px rgba(40, 154, 70, 0.6);
 }
 
-/* Hide customer service and zoom on login screen */
-#loginScreen ~ #csBtn {
-  display: none;
-}
-#loginScreen:not(.hidden) ~ #csBtn,
-#loginScreen:not(.hidden) ~ .zoom-controls {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Hide customer service and zoom on register screen */
-#registerScreen:not(.hidden) ~ #csBtn,
+/* Keep the customer service button visible on auth screens while hiding zoom controls */
+#loginScreen:not(.hidden) ~ .zoom-controls,
 #registerScreen:not(.hidden) ~ .zoom-controls {
   display: none !important;
   opacity: 0 !important;
@@ -2908,7 +2897,6 @@ body.light-mode #userMenuPanel .theme-toggle-btn:hover {
   color: rgba(255, 255, 255, 0.85);
   font-size: 25px;
   cursor: pointer;
-  text-decoration: none;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
