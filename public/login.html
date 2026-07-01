@@ -89,7 +89,6 @@
       import { auth } from "./firebase-config.js";
       import {
         signInWithEmailAndPassword,
-        onAuthStateChanged,
       } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
       import { initLoginFields } from "./login-fields.js";
 
@@ -100,10 +99,6 @@
       const loginError = document.getElementById("loginError");
 
       initLoginFields();
-
-      onAuthStateChanged(auth, (user) => {
-        if (user) window.location.replace("admin.html");
-      });
 
       const submitLogin = async () => {
         const email = emailIn?.value.trim();

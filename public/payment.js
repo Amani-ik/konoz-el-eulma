@@ -58,6 +58,7 @@ let selectedFile = null;
 let checkoutData = null;
 let isAdditionalMode = false;
 let additionalDistricts = [];
+let singleDistrictPrice = 3500; // fallback — overwritten from loaded config (plan "single")
 
 function redirect(path) {
   window.location.replace(path);
@@ -134,13 +135,17 @@ function renderPaymentDetails(payment) {
 
 function renderSummary(data) {
   if (isAdditionalMode) {
-    // Hide plan/price rows in additional mode — only districts matter
+    // Show a total above the districts: price-per-district × number requested
     if (summaryPlanRow) summaryPlanRow.style.display = "none";
-    if (summaryPriceRow) summaryPriceRow.style.display = "none";
+    if (summaryPriceRow) summaryPriceRow.style.display = "";
     if (paymentModeLabel) {
       paymentModeLabel.textContent = "طلب إضافة أسواق";
       paymentModeLabel.style.display = "";
     }
+
+    const total = singleDistrictPrice * additionalDistricts.length;
+    summaryPlan.textContent = "الإجمالي";
+    summaryPrice.textContent = formatPrice(total);
 
     const districts = additionalDistricts.map(districtLabel).filter(Boolean);
     summaryDistricts.innerHTML = districts.length
@@ -439,6 +444,12 @@ async function initPaymentPage(user) {
     const config = await loadSubscriptionConfig();
     planLabels = config.planLabels;
     renderPaymentDetails(config.payment);
+
+    const plansList = config.plans || [];
+    const singlePlan = plansList.find((p) => p.id === "single");
+    if (singlePlan && Number.isFinite(Number(singlePlan.price))) {
+      singleDistrictPrice = Number(singlePlan.price);
+    }
   } catch (err) {
     console.error("Payment config load error:", err);
     errorMsg.textContent = "تعذر تحميل بيانات الدفع.";
