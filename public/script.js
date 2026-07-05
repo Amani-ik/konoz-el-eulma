@@ -4503,10 +4503,13 @@ function onUserMenuAction(action) {
       window.location.href = "admin.html";
       break;
     case "restaurants":
+    case "cafeterias":
     case "hotels":
     case "delivery":
     case "ubers":
     case "pharmacies":
+      window.location.href = `near-services.html#${action}`;
+      break;
     case "tutorials":
     case "follow":
       if (typeof openComingSoon === "function") {

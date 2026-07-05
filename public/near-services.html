@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>الخدمات القريبة | كنوز العلمة</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Cinzel:wght@700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f6f2e8;
+        --paper-card: #fffdf8;
+        --paper-ink: #1f1f1f;
+        --paper-muted: #6b6459;
+        --paper-border: #d8d0c2;
+        --paper-line: #e8e2d6;
+        --paper-accent: #2d6a4f;
+        --paper-accent-soft: #e7f3ed;
+        --paper-highlight: #fff8e6;
+        --shadow: 0 8px 28px rgba(44, 38, 28, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Nunito", sans-serif;
+        background: var(--paper);
+        color: var(--paper-ink);
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.35;
+        background-image: radial-gradient(#d8d0c2 0.6px, transparent 0.6px);
+        background-size: 12px 12px;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .page-shell {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+      }
+
+      .title-block h1 {
+        margin: 0 0 6px;
+        font-family: "Cinzel", serif;
+        font-size: clamp(24px, 3.8vw, 34px);
+      }
+
+      .title-block p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: var(--paper-card);
+        border: 1px solid var(--paper-border);
+        color: var(--paper-accent);
+        font-weight: 700;
+        box-shadow: var(--shadow);
+      }
+
+      .service-nav {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+
+      .service-nav button {
+        border: 1px solid var(--paper-border);
+        background: var(--paper-card);
+        color: var(--paper-ink);
+        padding: 12px 10px;
+        border-radius: 16px;
+        cursor: pointer;
+        font-weight: 800;
+        transition:
+          transform 0.2s ease,
+          border-color 0.2s ease,
+          background 0.2s ease;
+      }
+
+      .service-nav button:hover,
+      .service-nav button.active {
+        transform: translateY(-2px);
+        border-color: var(--paper-accent);
+        background: var(--paper-accent-soft);
+        color: var(--paper-accent);
+      }
+
+      .service-section {
+        background: var(--paper-card);
+        border: 1px solid var(--paper-border);
+        border-radius: 24px;
+        padding: 22px;
+        margin-bottom: 18px;
+        box-shadow: var(--shadow);
+        scroll-margin-top: 90px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .section-head span {
+        color: var(--paper-muted);
+        font-size: 13px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        padding: 16px;
+        border-radius: 18px;
+        background: linear-gradient(
+          180deg,
+          #fffef9 0%,
+          var(--paper-highlight) 100%
+        );
+        border: 1px solid var(--paper-line);
+      }
+
+      .card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .type-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: var(--paper-accent-soft);
+        color: var(--paper-accent);
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .card p {
+        margin: 6px 0;
+        color: var(--paper-muted);
+        line-height: 1.6;
+      }
+
+      .card .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .meta a,
+      .meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: var(--paper-accent-soft);
+        color: var(--paper-accent);
+        font-size: 13px;
+        font-weight: 700;
+        border: 1px solid transparent;
+      }
+
+      .meta a:hover {
+        border-color: var(--paper-accent);
+      }
+
+      @media (max-width: 900px) {
+        .service-nav {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .service-nav {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .page-shell {
+          padding: 18px 12px 56px;
+        }
+        .service-section {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="topbar">
+        <div class="title-block">
+          <h1>الخدمات القريبة</h1>
+          <p>اختر القسم الذي تريده وانتقل مباشرة إلى قائمة الأقرب لك.</p>
+        </div>
+        <a class="back-link" href="index.html">← العودة إلى الرئيسية</a>
+      </div>
+
+      <nav class="service-nav" aria-label="الخدمات القريبة">
+        <button type="button" data-target="restaurants">مطاعم</button>
+        <button type="button" data-target="cafeterias">مقاهي</button>
+        <button type="button" data-target="hotels">فنادق</button>
+        <button type="button" data-target="delivery">توصيل</button>
+        <button type="button" data-target="ubers">نقل</button>
+        <button type="button" data-target="pharmacies">صيدليات</button>
+      </nav>
+
+      <div id="serviceSections"></div>
+    </div>
+
+    <script>
+      const serviceData = {
+        restaurants: [
+          {
+            name: "Turkish Sultan Restaurant",
+            location: "الموقع",
+            locationUrl:
+              "https://www.google.com/maps/place/Turkish+Sultan+Restaurant/@36.1634253,5.6718884,845m/data=!3m1!1e3!4m15!1m8!3m7!1s0x12f30ae0a7f2a177:0x51143cf7a9eb245a!2sEl+Eulma!3b1!8m2!3d36.1521434!4d5.6860471!16zL20vMGduYnly!3m5!1s0x12f30b9e56bdd957:0x84a3291ff04b57a9!8m2!3d36.1652393!4d5.6734052!16s%2Fg%2F11vb9krfk0?entry=ttu&g_ep=EgoyMDI2MDYxNi4wIKXMDSoASAFQAw%3D%3D",
+            phone: "0551892769",
+            type: "غالي",
+            description: "أطباق تركية مشوية ومقبلات طازجة في قلب المدينة.",
+          },
+          {
+            name: "Castro food",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/XHyzCF2byrKmAice9",
+            type: "متوسط",
+            description: "أفضل وجبات سريعة ومأكولات يومية.",
+          },
+        ],
+        cafeterias: [
+          {
+            name: "stabruks El eulma",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/k9KS3ycmQkUfPaf89",
+            type: "رخيص",
+            description: "قهوة ساخنة اكل سريع وحلويات ومكان هادئ للجلوس.",
+          },
+          {
+            name: "Barista Coffee",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/tKd1LTzRUjtUwqUd8",
+            type: "متوسط",
+            description: "مكان عصري يقدم القهوة المختصة والمشروبات الباردة.",
+          },
+          {
+            name: "مقهى غمود",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/Jqb3LGMiaThoWdem7",
+            type: "متوسط",
+            description: "مكان هادئ للاستمتاع بالقهوة والمشروبات.",
+          },
+        ],
+        hotels: [
+          {
+            name: "مرقد وايواء عزام محمد ناءل",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/w9reCM9QM2jzSAsd9",
+            phone: "0560320276",
+            type: "رخيص",
+            description: "إقامة مريحة وموقع قريب من المراكز الحيوية.",
+          },
+          {
+            name: "مرقد الراحة العلمة",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/JhZhEgcA5kiDwJVo9",
+            phone: "0555290668",
+            type: "متوسط",
+            description: "غرف حديثة وخدمة استقبال على مدار اليوم.",
+          },
+          {
+            name: "مرقد إيلاف",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/uw17tYhDCamuAMn88",
+            phone: "0550661633",
+            type: "رخيص",
+            description: "غرف نظيفة ومرافق أساسية للإقامة القصيرة والطويلة.",
+          },
+          {
+            name: " 2 مرقد وايواء عزام محمد ناءل",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/YE5hf6wdoK21tCRo9",
+            phone: "0560320276",
+            type: "متوسط",
+            description: "غرف نظيفة ومرافق أساسية للإقامة القصيرة والطويلة.",
+          },
+        ],
+        delivery: [
+          {
+            name: "مكتب التوصيل السريع",
+            location: "الطريق الوطني",
+            locationUrl:
+              "https://www.google.com/maps/search/%D8%A7%D9%84%D8%B7%D8%B1%D9%8A%D9%82+%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A",
+            phone: "+213 554 999 000",
+            type: "سريع",
+            pricing: "توصيل",
+            description: "توصيل سريع للوجبات والطلبات اليومية.",
+          },
+          {
+            name: "مكتب بريدية",
+            location: "حي الأمير عبد القادر",
+            locationUrl:
+              "https://www.google.com/maps/search/%D8%AD%D9%8A+%D8%A7%D9%84%D8%A3%D9%85%D9%8A%D8%B1+%D8%B9%D8%A8%D8%AF+%D8%A7%D9%84%D9%82%D8%A7%D8%AF%D8%B1",
+            phone: "+213 557 121 314",
+            type: "مريح",
+            pricing: "توصيل",
+            description: "خدمة توصيل للمكاتب والطلبات الصغيرة.",
+          },
+        ],
+        ubers: [],
+        pharmacies: [
+          {
+            name: "Pharmacie l'hôpital",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/wSGxgmAa1fa1dvRT8",
+            type: "متوسط",
+            description:
+              "صيدلية كبيرة الحجم توفر الأدوية الأساسية والمستلزمات الطبية.",
+          },
+          {
+            name: " صيدلية ساميي فراجي ",
+            location: "الموقع",
+            locationUrl: "https://maps.app.goo.gl/NNucnqRbwCzSYMvQ9",
+            phone: "030763648",
+            type: "متوسط",
+            description:
+              "صيدلية تقدم مجموعة واسعة من الأدوية والمستحضرات الطبية.",
+          },
+        ],
+      };
+
+      const labels = {
+        restaurants: "مطاعم",
+        cafeterias: "مقاهي",
+        hotels: "فنادق",
+        delivery: "مكاتب توصيل",
+        ubers: "خدمات نقل",
+        pharmacies: "صيدليات",
+      };
+
+      const serviceSections = document.getElementById("serviceSections");
+      const navButtons = document.querySelectorAll(".service-nav button");
+
+      function renderServices() {
+        serviceSections.innerHTML = Object.entries(serviceData)
+          .map(([key, items]) => {
+            const cards = items
+              .map((item) => {
+                const phoneValue = item.phone ? String(item.phone).trim() : "";
+                const phoneHref = phoneValue
+                  ? `tel:${phoneValue.replace(/[^\d+]/g, "")}`
+                  : "";
+                const locationHref = item.locationUrl || "#";
+                const pricingLabel = item.pricing || "";
+                const typeLabel = item.type || "";
+                const phoneMarkup = phoneValue
+                  ? `<a href="${phoneHref}">📞 ${phoneValue}</a>`
+                  : "";
+
+                return `
+                  <article class="card">
+                    <div class="card-top">
+                      <h3>${item.name}</h3>
+                      ${typeLabel ? `<span class="type-pill">${typeLabel}</span>` : ""}
+                    </div>
+                    <p>${item.description}</p>
+                    <div class="meta">
+                      <a href="${locationHref}" target="_blank" rel="noopener noreferrer">📍 ${item.location}</a>
+                      ${phoneMarkup}
+                    </div>
+                  </article>
+                `;
+              })
+              .join("");
+
+            return `
+              <section id="${key}" class="service-section">
+                <div class="section-head">
+                  <h2>${labels[key]}</h2>
+                  <span>${items.length} خيارات متاحة</span>
+                </div>
+                <div class="cards">${cards}</div>
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      function setActiveButton(targetKey) {
+        navButtons.forEach((button) => {
+          button.classList.toggle(
+            "active",
+            button.dataset.target === targetKey,
+          );
+        });
+      }
+
+      function scrollToSection(targetKey) {
+        const section = document.getElementById(targetKey);
+        if (!section) return;
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function handleHashChange() {
+        const targetKey = location.hash.replace("#", "");
+        if (!serviceData[targetKey]) return;
+        setActiveButton(targetKey);
+        requestAnimationFrame(() => scrollToSection(targetKey));
+      }
+
+      navButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const targetKey = button.dataset.target;
+          setActiveButton(targetKey);
+          history.replaceState(null, "", `#${targetKey}`);
+          scrollToSection(targetKey);
+        });
+      });
+
+      window.addEventListener("hashchange", handleHashChange);
+      renderServices();
+      handleHashChange();
+    </script>
+  </body>
+</html>
