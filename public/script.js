@@ -4512,9 +4512,6 @@ function onUserMenuAction(action) {
       break;
     case "tutorials":
     case "follow":
-      if (typeof openComingSoon === "function") {
-        openComingSoon();
-      }
       break;
     default:
       console.log("User menu action:", action);
