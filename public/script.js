@@ -108,7 +108,7 @@ async function _loadUserDistricts(user) {
     // Admins get full access — unlock every district
     if (isAdminUser(userDoc)) {
       DISTRICTS.forEach((d) => {
-        d.isPaid = true;
+        if (!d.locked) d.isPaid = true;
       });
       return;
     }
@@ -1060,6 +1060,31 @@ const DISTRICTS = [
       { x: 51, y: 60, mi: 16, name: "Zaki Toys El Eulma" },
     ],
   },
+  {
+    id: "locked",
+    isPaid: false,
+    locked: true,
+    name: "قريبا",
+    emoji: "🔒",
+    accent: "#ed89ac",
+    px: 20,
+    py: 15,
+    islocked: true,
+    enabled: false,
+    pins: [],
+  },
+  {
+    id: "locked",
+    isPaid: false,
+    locked: true,
+    name: "قريبا",
+    emoji: "🔒",
+    accent: "#ed89ac",
+    px: 55,
+    py: 15,
+    islocked: true,
+    pins: [],
+  },
 ];
 
 /* ══ STATE ══ */
@@ -1740,10 +1765,11 @@ function buildWorld() {
   const inner = document.getElementById("worldInner");
   inner.querySelectorAll(".dmarker").forEach((e) => e.remove());
   DISTRICTS.forEach((d, i) => {
+    const isPaid = d.isPaid && !d.locked;
     const m = document.createElement("div");
-    m.className = "dmarker" + (d.isPaid ? "" : " dmarker-locked");
+    m.className = "dmarker" + (isPaid ? "" : " dmarker-locked");
     m.style.cssText = `left:${d.px}%;top:${d.py}%;animation-duration:${3 + i * 0.35}s;animation-delay:${i * 0.2}s;`;
-    if (d.isPaid) {
+    if (isPaid) {
       m.innerHTML = `<div class="mbubble">${d.emoji}</div><div class="mtip"></div><div class="mlabel"><span class="mlname">${d.name}</span></div>`;
     } else {
       m.innerHTML = `<div class="mbubble mbubble-locked">🔒</div><div class="mtip"></div><div class="mlabel"><span class="mlname">${d.name}</span></div>`;
@@ -1877,9 +1903,13 @@ wC.addEventListener("touchend", (e) => {
 
 /* ══ ENTER DISTRICT ══ */
 function enterDistrict(d, evt, onReady) {
-  // Block entry if district is not paid
-  if (!d.isPaid) {
-    openDistrictUpgrade(d);
+  // Block entry if district is not paid or permanently locked
+  if (!d.isPaid || d.locked) {
+    if (d.locked) {
+      openComingSoon();
+    } else {
+      openDistrictUpgrade(d);
+    }
     return;
   }
 
@@ -1991,7 +2021,8 @@ function buildPins(d, onReady) {
     pin.className = "mpin";
     pin.style.cssText = `left:${pos.x}%;top:${pos.y}%;`;
 
-    if (pos.locked) {
+    const isLocked = pos.locked || pos.islocked;
+    if (isLocked) {
       pin.innerHTML =
         '<div class="mpin-label">قريباً</div>' +
         '<div class="mpin-bubble" style="opacity:1;">🔒</div>' +
