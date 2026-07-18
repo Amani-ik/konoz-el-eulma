@@ -47,14 +47,16 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid;
     }
 
-    // News collection: public read-only access
+    // News collection: public read, admin write
     match /news/{newsId} {
       allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // System notifications collection: public read-only access
+    // System notifications collection: public read, admin write
     match /system/{systemId} {
       allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     match /{document=**} {

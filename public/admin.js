@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { ADMIN_DISTRICTS } from "./admin-districts.js";
 import {
   onAuthStateChanged,
   signOut,
@@ -14,6 +15,10 @@ import {
   serverTimestamp,
   Timestamp,
   deleteField,
+  setDoc,
+  deleteDoc,
+  query,
+  orderBy,
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const SUBSCRIPTION_DAYS = 30;
@@ -48,9 +53,33 @@ const additionalTabCount = document.getElementById("additionalTabCount");
 const sidebarAdditionalCount = document.getElementById("sidebarAdditionalCount");
 const overviewAdditionalCount = document.getElementById("overviewAdditionalCount");
 
+const marketNewsForm = document.getElementById("marketNewsForm");
+const marketNewsTitle = document.getElementById("marketNewsTitle");
+const marketNewsSub = document.getElementById("marketNewsSub");
+const marketNewsPublished = document.getElementById("marketNewsPublished");
+const marketNewsDistrict = document.getElementById("marketNewsDistrict");
+const marketNewsMarket = document.getElementById("marketNewsMarket");
+const marketNewsLink = document.getElementById("marketNewsLink");
+const marketNewsContent = document.getElementById("marketNewsContent");
+const marketNewsPublishBtn = document.getElementById("marketNewsPublishBtn");
+const marketNewsTableBody = document.getElementById("marketNewsTableBody");
+const marketNewsCount = document.getElementById("marketNewsCount");
+
+const systemNewsForm = document.getElementById("systemNewsForm");
+const systemNewsTitle = document.getElementById("systemNewsTitle");
+const systemNewsSub = document.getElementById("systemNewsSub");
+const systemNewsType = document.getElementById("systemNewsType");
+const systemNewsPublished = document.getElementById("systemNewsPublished");
+const systemNewsContent = document.getElementById("systemNewsContent");
+const systemNewsPublishBtn = document.getElementById("systemNewsPublishBtn");
+const systemNewsTableBody = document.getElementById("systemNewsTableBody");
+const systemNewsCount = document.getElementById("systemNewsCount");
+
 let unsubscribers = [];
 let allUsersCache = [];
 let pendingCache = [];
+let marketNewsCache = [];
+let systemNewsCache = [];
 let searchFilter = "";
 let statusFilter = "";
 let pendingSort = { dir: null };
@@ -84,6 +113,15 @@ function escapeHtml(value = "") {
     .replace(/"/g, "&quot;");
 }
 
+function isValidHttpUrl(value = "") {
+  try {
+    const parsed = new URL(String(value));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function merchantName(data = {}) {
   return (
     data.fullName ||
@@ -108,12 +146,278 @@ function formatTimestamp(value) {
     const d =
       typeof value === "object" && typeof value.toDate === "function"
         ? value.toDate()
-        : new Date(value);
+        : typeof value === "string"
+          ? new Date(value.replace(" ", "T"))
+          : new Date(value);
     if (isNaN(d.getTime())) return "—";
     return `${d.toLocaleDateString("ar-DZ")} ${d.toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
   } catch {
     return "—";
   }
+}
+
+function formatPublishedForFirestore(datetimeLocalValue) {
+  if (!datetimeLocalValue) return "";
+  const d = new Date(datetimeLocalValue);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function defaultDatetimeLocalValue() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function districtById(id) {
+  return ADMIN_DISTRICTS.find(
+    (d) => String(d.id).toLowerCase() === String(id || "").toLowerCase(),
+  );
+}
+
+function populateDistrictSelect() {
+  if (!marketNewsDistrict) return;
+  marketNewsDistrict.innerHTML = ADMIN_DISTRICTS.map(
+    (d) =>
+      `<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)}</option>`,
+  ).join("");
+  updateMarketSelect();
+}
+
+function updateMarketSelect() {
+  if (!marketNewsDistrict || !marketNewsMarket) return;
+  const district = districtById(marketNewsDistrict.value);
+  const markets = district?.markets || [];
+  if (!markets.length) {
+    marketNewsMarket.innerHTML =
+      '<option value="">— لا توجد متاجر —</option>';
+    return;
+  }
+  marketNewsMarket.innerHTML = markets
+    .map(
+      (name, idx) =>
+        `<option value="${idx}">${idx} — ${escapeHtml(name)}</option>`,
+    )
+    .join("");
+}
+
+function resetMarketNewsForm() {
+  if (marketNewsForm) marketNewsForm.reset();
+  if (marketNewsPublished) marketNewsPublished.value = defaultDatetimeLocalValue();
+  populateDistrictSelect();
+}
+
+function resetSystemNewsForm() {
+  if (systemNewsForm) systemNewsForm.reset();
+  if (systemNewsPublished) systemNewsPublished.value = defaultDatetimeLocalValue();
+  if (systemNewsType) systemNewsType.value = "update";
+}
+
+function renderMarketNewsTable(items = []) {
+  if (!marketNewsTableBody) return;
+  if (marketNewsCount) marketNewsCount.textContent = String(items.length);
+
+  if (!items.length) {
+    marketNewsTableBody.innerHTML =
+      '<tr class="empty-row"><td colspan="6">لا توجد أخبار منشورة</td></tr>';
+    return;
+  }
+
+  marketNewsTableBody.innerHTML = items
+    .map(({ id, data }) => {
+      const district = districtById(data.districtId);
+      const marketName =
+        district?.markets?.[Number(data.marketIdx)] || `#${data.marketIdx ?? "?"}`;
+      const locationLabel = district
+        ? `${district.name} / ${marketName}`
+        : `${data.districtId || "—"} / ${marketName}`;
+      return `<tr>
+        <td>${escapeHtml(data.title || "—")}</td>
+        <td><span class="badge-plan">${escapeHtml(data.sub || "—")}</span></td>
+        <td>${escapeHtml(formatTimestamp(data.published))}</td>
+        <td><span class="news-content-preview" title="${escapeHtml(locationLabel)}">${escapeHtml(locationLabel)}</span></td>
+        <td><span class="news-content-preview" title="${escapeHtml(data.content || "")}">${escapeHtml(data.content || "—")}</span></td>
+        <td>
+          <div class="row-actions">
+            <button type="button" class="btn btn-danger btn-sm btn-delete-market-news" data-id="${escapeHtml(id)}" title="حذف">
+              <i class="fa-solid fa-trash"></i> حذف
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderSystemNewsTable(items = []) {
+  if (!systemNewsTableBody) return;
+  if (systemNewsCount) systemNewsCount.textContent = String(items.length);
+
+  if (!items.length) {
+    systemNewsTableBody.innerHTML =
+      '<tr class="empty-row"><td colspan="6">لا توجد إشعارات منشورة</td></tr>';
+    return;
+  }
+
+  const typeLabels = {
+    update: "تحديث",
+    notice: "إشعار",
+    alert: "تنبيه",
+  };
+
+  systemNewsTableBody.innerHTML = items
+    .map(({ id, data }) => {
+      const typeKey = String(data.type || "notice").toLowerCase();
+      const typeLabel = typeLabels[typeKey] || data.type || "—";
+      return `<tr>
+        <td>${escapeHtml(data.title || "—")}</td>
+        <td><span class="badge-plan">${escapeHtml(data.sub || "—")}</span></td>
+        <td>${escapeHtml(typeLabel)}</td>
+        <td>${escapeHtml(formatTimestamp(data.published))}</td>
+        <td><span class="news-content-preview" title="${escapeHtml(data.content || "")}">${escapeHtml(data.content || "—")}</span></td>
+        <td>
+          <div class="row-actions">
+            <button type="button" class="btn btn-danger btn-sm btn-delete-system-news" data-id="${escapeHtml(id)}" title="حذف">
+              <i class="fa-solid fa-trash"></i> حذف
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function publishMarketNews(event) {
+  event.preventDefault();
+  if (!marketNewsPublishBtn) return;
+
+  const title = marketNewsTitle?.value.trim();
+  const sub = marketNewsSub?.value.trim();
+  const content = marketNewsContent?.value.trim();
+  const published = formatPublishedForFirestore(marketNewsPublished?.value);
+  const districtId = marketNewsDistrict?.value;
+  const marketIdx = Number(marketNewsMarket?.value);
+  const link = marketNewsLink?.value.trim() || "";
+
+  if (!title || !sub || !content || !published || !districtId || Number.isNaN(marketIdx)) {
+    alert("يرجى ملء جميع الحقول المطلوبة.");
+    return;
+  }
+
+  marketNewsPublishBtn.disabled = true;
+  try {
+    const newsId = `n${Date.now()}`;
+    await setDoc(doc(db, "news", newsId), {
+      title,
+      sub,
+      content,
+      published,
+      districtId,
+      marketIdx,
+      link,
+    });
+    resetMarketNewsForm();
+  } catch (err) {
+    console.error("publishMarketNews:", err);
+    alert("فشل النشر: " + err.message);
+  } finally {
+    marketNewsPublishBtn.disabled = false;
+  }
+}
+
+async function publishSystemNews(event) {
+  event.preventDefault();
+  if (!systemNewsPublishBtn) return;
+
+  const title = systemNewsTitle?.value.trim();
+  const sub = systemNewsSub?.value.trim();
+  const content = systemNewsContent?.value.trim();
+  const published = formatPublishedForFirestore(systemNewsPublished?.value);
+  const type = systemNewsType?.value || "notice";
+
+  if (!title || !sub || !content || !published) {
+    alert("يرجى ملء جميع الحقول المطلوبة.");
+    return;
+  }
+
+  systemNewsPublishBtn.disabled = true;
+  try {
+    const systemId = `s${Date.now()}`;
+    await setDoc(doc(db, "system", systemId), {
+      title,
+      sub,
+      type,
+      content,
+      published,
+    });
+    resetSystemNewsForm();
+  } catch (err) {
+    console.error("publishSystemNews:", err);
+    alert("فشل النشر: " + err.message);
+  } finally {
+    systemNewsPublishBtn.disabled = false;
+  }
+}
+
+async function deleteMarketNews(newsId) {
+  if (!newsId) return;
+  const confirmed = confirm("حذف هذا الخبر نهائياً؟");
+  if (!confirmed) return;
+  await deleteDoc(doc(db, "news", newsId));
+}
+
+async function deleteSystemNews(systemId) {
+  if (!systemId) return;
+  const confirmed = confirm("حذف هذا الإشعار نهائياً؟");
+  if (!confirmed) return;
+  await deleteDoc(doc(db, "system", systemId));
+}
+
+function startNewsListeners() {
+  unsubscribers.push(
+    onSnapshot(
+      query(collection(db, "news"), orderBy("published", "desc")),
+      (snap) => {
+        marketNewsCache = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+        renderMarketNewsTable(marketNewsCache);
+      },
+      (err) => {
+        console.error("news onSnapshot:", err);
+        if (marketNewsTableBody) {
+          marketNewsTableBody.innerHTML =
+            '<tr class="empty-row"><td colspan="6">تعذّر تحميل الأخبار</td></tr>';
+        }
+      },
+    ),
+  );
+
+  unsubscribers.push(
+    onSnapshot(
+      query(collection(db, "system"), orderBy("published", "desc")),
+      (snap) => {
+        systemNewsCache = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+        renderSystemNewsTable(systemNewsCache);
+      },
+      (err) => {
+        console.error("system onSnapshot:", err);
+        if (systemNewsTableBody) {
+          systemNewsTableBody.innerHTML =
+            '<tr class="empty-row"><td colspan="6">تعذّر تحميل الإشعارات</td></tr>';
+        }
+      },
+    ),
+  );
+}
+
+function bindNewsForms() {
+  populateDistrictSelect();
+  resetMarketNewsForm();
+  resetSystemNewsForm();
+
+  marketNewsDistrict?.addEventListener("change", updateMarketSelect);
+  marketNewsForm?.addEventListener("submit", publishMarketNews);
+  systemNewsForm?.addEventListener("submit", publishSystemNews);
 }
 
 function tsMillis(value) {
@@ -265,9 +569,11 @@ function renderPendingRow(id, data) {
   const receiptUrl =
     data.submittedReceiptUrl || data.receiptUrl || data.receipt || "";
   const safeReceipt = escapeHtml(receiptUrl);
-  const thumb = receiptUrl
+  const thumb = isValidHttpUrl(receiptUrl)
     ? `<img class="receipt-thumb" src="${safeReceipt}" alt="إيصال" data-receipt="${safeReceipt}" />`
-    : `<span style="color:var(--text-3)">لا يوجد</span>`;
+    : receiptUrl
+      ? `<span style="color:var(--danger, #ff8a8a)">رابط غير صالح</span>`
+      : `<span style="color:var(--text-3)">لا يوجد</span>`;
 
   const planLabel = requestedPlanLabel(data);
   const planCell =
@@ -535,9 +841,11 @@ async function setAccountDisabled(userId, disabled) {
 function renderAdditionalRow(requestId, userId, data) {
   const receiptUrl = data.submittedReceiptUrl || "";
   const safeReceipt = escapeHtml(receiptUrl);
-  const thumb = receiptUrl
+  const thumb = isValidHttpUrl(receiptUrl)
     ? `<img class="receipt-thumb" src="${safeReceipt}" alt="إيصال" data-receipt="${safeReceipt}" />`
-    : `<span style="color:var(--text-3)">لا يوجد</span>`;
+    : receiptUrl
+      ? `<span style="color:var(--danger, #ff8a8a)">رابط غير صالح</span>`
+      : `<span style="color:var(--text-3)">لا يوجد</span>`;
 
   const districts = Array.isArray(data.requestedDistricts)
     ? data.requestedDistricts
@@ -856,6 +1164,34 @@ function bindTableActions() {
     const thumb = e.target.closest(".receipt-thumb");
     if (thumb?.dataset.receipt) {
       openLightbox(thumb.dataset.receipt);
+      return;
+    }
+
+    const deleteMarketNewsBtn = e.target.closest(".btn-delete-market-news");
+    if (deleteMarketNewsBtn) {
+      const newsId = deleteMarketNewsBtn.dataset.id;
+      if (!newsId || deleteMarketNewsBtn.disabled) return;
+      deleteMarketNewsBtn.disabled = true;
+      deleteMarketNews(newsId)
+        .catch((err) => {
+          console.error("deleteMarketNews:", err);
+          alert("فشل الحذف: " + err.message);
+          deleteMarketNewsBtn.disabled = false;
+        });
+      return;
+    }
+
+    const deleteSystemNewsBtn = e.target.closest(".btn-delete-system-news");
+    if (deleteSystemNewsBtn) {
+      const systemId = deleteSystemNewsBtn.dataset.id;
+      if (!systemId || deleteSystemNewsBtn.disabled) return;
+      deleteSystemNewsBtn.disabled = true;
+      deleteSystemNews(systemId)
+        .catch((err) => {
+          console.error("deleteSystemNews:", err);
+          alert("فشل الحذف: " + err.message);
+          deleteSystemNewsBtn.disabled = false;
+        });
     }
   });
 }
@@ -879,6 +1215,7 @@ function applyUsersSnapshot(users) {
 
 function startListeners() {
   startAdditionalPaymentsListener();
+  startNewsListeners();
   unsubscribers.push(
     onSnapshot(
       collection(db, "users"),
@@ -1032,6 +1369,7 @@ bindSearch();
 bindLightbox();
 bindLogout();
 bindSortControls();
+bindNewsForms();
 
 onAuthStateChanged(auth, async (user) => {
   cleanup();
